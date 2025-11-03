@@ -1,0 +1,822 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "تحليلات المستخدمين - User Analytics",
+    "tags": ["saler", "monitoring", "analytics", "users", "business"],
+    "timezone": "Asia/Riyadh",
+    "refresh": "1m",
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "المستخدمين النشطين - Active Users",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(active_users_total)",
+            "legendFormat": "Current Active Users",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(increase(user_sessions_total[24h]))",
+            "legendFormat": "Sessions Today",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(increase(user_sessions_total[1h]))",
+            "legendFormat": "Sessions Last Hour",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "custom": {
+              "displayMode": "color-background"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 100},
+                {"color": "red", "value": 1000}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "text": {},
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 2,
+        "title": "معدل التحويل - Conversion Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(increase(conversions_total[24h])) / sum(increase(user_events_total[24h])) * 100",
+            "legendFormat": "Conversion Rate",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(increase(signups_total[24h])) / sum(increase(visits_total[24h])) * 100",
+            "legendFormat": "Signup Rate",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(increase(purchases_total[24h])) / sum(increase(cart_views_total[24h])) * 100",
+            "legendFormat": "Purchase Rate",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "custom": {
+              "displayMode": "color-background"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 2},
+                {"color": "green", "value": 5}
+              ]
+            },
+            "unit": "percent",
+            "min": 0,
+            "max": 100
+          }
+        },
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "text": {},
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 3,
+        "title": "القيمة المتوسطة للطلب - Average Order Value",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg(order_value_avg)",
+            "legendFormat": "Average Order Value",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(order_revenue_total[24h]) / sum(increase(orders_completed_total[24h]))",
+            "legendFormat": "Daily Avg Order Value",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(increase(order_revenue_total[7d])) / sum(increase(orders_completed_total[7d]))",
+            "legendFormat": "Weekly Avg Order Value",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "custom": {
+              "displayMode": "color-background"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 50},
+                {"color": "green", "value": 100}
+              ]
+            },
+            "unit": "currencySAR"
+          }
+        },
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "text": {},
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 4,
+        "title": "زمن الجلسة ومتوسط القيمة - Session Duration & Bounce Rate",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "avg(session_duration_seconds)",
+            "legendFormat": "Avg Session Duration",
+            "refId": "A"
+          },
+          {
+            "expr": "bounce_rate * 100",
+            "legendFormat": "Bounce Rate",
+            "refId": "B"
+          },
+          {
+            "expr": "avg(pages_per_session)",
+            "legendFormat": "Pages per Session",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisPlacement": "auto",
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 10,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "lineInterpolation": "linear",
+              "lineWidth": 2,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "red", "value": 80}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "options": {
+          "legend": {
+            "calcs": ["mean", "max"],
+            "displayMode": "table",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "none"
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "نشاط المستخدمين حسب الساعة - User Activity by Hour",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "sum(rate(user_events_total[1h])) by (hour_of_day)",
+            "legendFormat": "{{hour_of_day}}:00",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "scaleDistribution": {
+                "type": "linear"
+              }
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 100},
+                {"color": "red", "value": 500}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "options": {
+          "calculate": false,
+          "calculation": {"xBuckets": {"mode": "size", "value": "auto"}},
+          "color": {
+            "scheme": "Viridis",
+            "fill": "scale",
+            "mode": "opacity",
+            "scale": "exponential",
+            "steps": 128
+          },
+          "exemplars": {
+            "color": "rgba(255, 0, 255, 0.7)"
+          },
+          "legend": {
+            "show": true
+          },
+          "rowsFrame": {
+            "mode": "index",
+            "index": 0
+          },
+          "showValue": "never",
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          },
+          "xAxis": {
+            "mode": "series",
+            "show": true
+          },
+          "yAxis": {
+            "format": "short",
+            "logBase": 1,
+            "show": true
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "الصفحات الأكثر زيارة - Top Pages",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "topk(10, sum(rate(page_views_total[24h])) by (page_path))",
+            "legendFormat": "{{page_path}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "auto",
+              "displayMode": "color-background"
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 100},
+                {"color": "red", "value": 1000}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 16},
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "desc": true,
+              "displayName": "Value"
+            }
+          ]
+        }
+      },
+      {
+        "id": 7,
+        "title": "مصادر الزيارات - Traffic Sources",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum(rate(user_visits_total[24h])) by (traffic_source)",
+            "legendFormat": "{{traffic_source}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              }
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "red", "value": 80}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 16},
+        "options": {
+          "legend": {
+            "displayMode": "visible",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "pieType": "pie",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "المتصفحات المستخدمة - Top Browsers",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "topk(5, sum(rate(user_visits_total[24h])) by (browser))",
+            "legendFormat": "{{browser}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "auto",
+              "displayMode": "color-background"
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 100},
+                {"color": "red", "value": 1000}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 16},
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "desc": true,
+              "displayName": "Value"
+            }
+          ]
+        }
+      },
+      {
+        "id": 9,
+        "title": "الإيرادات اليومية - Daily Revenue",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "sum(rate(order_revenue_total[24h]))",
+            "legendFormat": "Daily Revenue",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(increase(order_revenue_total[7d])) / 7",
+            "legendFormat": "7-Day Average",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(increase(order_revenue_total[30d])) / 30",
+            "legendFormat": "30-Day Average",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisPlacement": "auto",
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 20,
+              "gradientMode": "opacity",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "lineInterpolation": "linear",
+              "lineWidth": 2,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "red", "value": 80}
+              ]
+            },
+            "unit": "currencySAR"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "options": {
+          "legend": {
+            "calcs": ["mean", "max"],
+            "displayMode": "table",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "none"
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "معدل رضا العملاء - Customer Satisfaction",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg(customer_satisfaction_score)",
+            "legendFormat": "Average Rating",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(reviews_positive_total) / sum(reviews_total) * 100",
+            "legendFormat": "Positive Review Rate",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(customer_support_tickets_total[24h])",
+            "legendFormat": "Support Tickets Today",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "custom": {
+              "displayMode": "color-background"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 3},
+                {"color": "green", "value": 4}
+              ]
+            },
+            "unit": "short",
+            "min": 0,
+            "max": 5
+          }
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 24},
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "text": {},
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 11,
+        "title": "معدل الارتجاع - Retention Rate",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "user_retention_rate_1d * 100",
+            "legendFormat": "1-Day Retention",
+            "refId": "A"
+          },
+          {
+            "expr": "user_retention_rate_7d * 100",
+            "legendFormat": "7-Day Retention",
+            "refId": "B"
+          },
+          {
+            "expr": "user_retention_rate_30d * 100",
+            "legendFormat": "30-Day Retention",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisPlacement": "auto",
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 10,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "lineInterpolation": "linear",
+              "lineWidth": 2,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "line"
+              }
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 20},
+                {"color": "green", "value": 50}
+              ]
+            },
+            "unit": "percent",
+            "min": 0,
+            "max": 100
+          }
+        },
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 24},
+        "options": {
+          "legend": {
+            "calcs": ["mean", "max"],
+            "displayMode": "table",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "none"
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "القنوات التسويقية - Marketing Channels Performance",
+        "type": "barchart",
+        "targets": [
+          {
+            "expr": "sum(rate(marketing_conversions_total[24h])) by (channel)",
+            "legendFormat": "{{channel}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisPlacement": "auto",
+              "barAlignment": 0,
+              "displayMode": "color-background",
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "orientation": "auto",
+              "reduceOptions": {
+                "values": false,
+                "calcs": ["lastNotNull"],
+                "fields": ""
+              },
+              "text": {}
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "red", "value": 80}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32},
+        "options": {
+          "legend": {
+            "displayMode": "visible",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "orientation": "auto",
+          "tooltip": {
+            "mode": "single",
+            "sort": "none"
+          },
+          "xOrientation": "horizontal"
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "current": {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "definition": "label_values(user_events_total, user_segment)",
+          "description": "User segment filter",
+          "error": null,
+          "hide": 0,
+          "includeAll": true,
+          "label": "User Segment",
+          "multi": true,
+          "name": "user_segment",
+          "options": [],
+          "query": "label_values(user_events_total, user_segment)",
+          "refresh": 1,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 0,
+          "type": "query"
+        },
+        {
+          "current": {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "definition": "label_values(user_events_total, country)",
+          "description": "Country filter",
+          "error": null,
+          "hide": 0,
+          "includeAll": true,
+          "label": "Country",
+          "multi": true,
+          "name": "country",
+          "options": [],
+          "query": "label_values(user_events_total, country)",
+          "refresh": 1,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 0,
+          "type": "query"
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": {
+            "type": "datasource",
+            "uid": "grafana"
+          },
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "enable": true,
+          "expr": "increase(marketing_campaign_events_total[1m]) > 0",
+          "iconColor": "purple",
+          "name": "Marketing Campaigns",
+          "target": {
+            "limit": 100,
+            "matchAny": false,
+            "tags": [],
+            "type": "dashboard"
+          },
+          "textFormat": "{{campaign_name}} - {{event}}",
+          "titleFormat": "Marketing Campaign Event"
+        }
+      ]
+    }
+  }
+}

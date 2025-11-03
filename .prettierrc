@@ -1,0 +1,172 @@
+{
+  "printWidth": 100,
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "singleQuote": true,
+  "quoteProps": "as-needed",
+  "trailingComma": "es5",
+  "bracketSpacing": true,
+  "bracketSameLine": false,
+  "arrowParens": "always",
+  "endOfLine": "lf",
+  "embeddedLanguageFormatting": "auto",
+  "htmlWhitespaceSensitivity": "css",
+  "insertPragma": false,
+  "proseWrap": "preserve",
+  "requirePragma": false,
+  "overrides": [
+    {
+      "files": "*.{js,jsx,ts,tsx}",
+      "options": {
+        "printWidth": 100,
+        "tabWidth": 2,
+        "useTabs": false,
+        "semi": true,
+        "singleQuote": true,
+        "quoteProps": "as-needed",
+        "trailingComma": "es5",
+        "bracketSpacing": true,
+        "bracketSameLine": false,
+        "arrowParens": "always"
+      }
+    },
+    {
+      "files": "*.{json,jsonc}",
+      "options": {
+        "printWidth": 120,
+        "tabWidth": 2,
+        "useTabs": false,
+        "semi": false,
+        "singleQuote": false,
+        "quoteProps": "as-needed",
+        "trailingComma": "es5",
+        "bracketSpacing": true,
+        "bracketSameLine": false,
+        "arrowParens": "always"
+      }
+    },
+    {
+      "files": "*.{yml,yaml}",
+      "options": {
+        "printWidth": 120,
+        "tabWidth": 2,
+        "useTabs": false,
+        "semi": true,
+        "singleQuote": false,
+        "quoteProps": "as-needed",
+        "trailingComma": "none",
+        "bracketSpacing": true,
+        "bracketSameLine": false,
+        "arrowParens": "always"
+      }
+    },
+    {
+      "files": "*.{md,mdx}",
+      "options": {
+        "printWidth": 100,
+        "tabWidth": 2,
+        "useTabs": false,
+        "semi": true,
+        "singleQuote": true,
+        "quoteProps": "as-needed",
+        "trailingComma": "es5",
+        "bracketSpacing": true,
+        "bracketSameLine": false,
+        "arrowParens": "always",
+        "proseWrap": "preserve"
+      }
+    },
+    {
+      "files": "*.{html,htm}",
+      "options": {
+        "printWidth": 120,
+        "tabWidth": 2,
+        "useTabs": false,
+        "semi": true,
+        "singleQuote": true,
+        "quoteProps": "as-needed",
+        "trailingComma": "es5",
+        "bracketSpacing": true,
+        "bracketSameLine": false,
+        "arrowParens": "always",
+        "htmlWhitespaceSensitivity": "css"
+      }
+    },
+    {
+      "files": "*.{css,scss,sass,less}",
+      "options": {
+        "printWidth": 120,
+        "tabWidth": 2,
+        "useTabs": false,
+        "semi": true,
+        "singleQuote": false,
+        "quoteProps": "as-needed",
+        "trailingComma": "es5",
+        "bracketSpacing": true,
+        "bracketSameLine": false,
+        "arrowParens": "always"
+      }
+    },
+    {
+      "files": "*.{py}",
+      "options": {
+        "printWidth": 88,
+        "tabWidth": 4,
+        "useTabs": false,
+        "semi": true,
+        "singleQuote": true,
+        "quoteProps": "as-needed",
+        "trailingComma": "es5",
+        "bracketSpacing": true,
+        "bracketSameLine": false,
+        "arrowParens": "always"
+      }
+    },
+    {
+      "files": "*.{sql,sqlx}",
+      "options": {
+        "printWidth": 120,
+        "tabWidth": 2,
+        "useTabs": false,
+        "semi": true,
+        "singleQuote": true,
+        "quoteProps": "as-needed",
+        "trailingComma": "es5",
+        "bracketSpacing": true,
+        "bracketSameLine": false,
+        "arrowParens": "always"
+      }
+    },
+    {
+      "files": "*.{sh,bash,zsh,fish}",
+      "options": {
+        "printWidth": 120,
+        "tabWidth": 2,
+        "useTabs": false,
+        "semi": true,
+        "singleQuote": true,
+        "quoteProps": "as-needed",
+        "trailingComma": "es5",
+        "bracketSpacing": true,
+        "bracketSameLine": false,
+        "arrowParens": "always"
+      }
+    },
+    {
+      "files": "{package.json,.gitignore,.prettierrc,.prettierignore}",
+      "options": {
+        "printWidth": 120,
+        "tabWidth": 2,
+        "useTabs": false,
+        "semi": false,
+        "singleQuote": false,
+        "quoteProps": "as-needed",
+        "trailingComma": "es5",
+        "bracketSpacing": true,
+        "bracketSameLine": false,
+        "arrowParens": "always"
+      }
+    }
+  ]
+}

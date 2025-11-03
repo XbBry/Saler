@@ -1,0 +1,87 @@
+{
+  "semi": true,
+  "trailingComma": "es5",
+  "singleQuote": false,
+  "quoteProps": "as-needed",
+  "bracketSpacing": true,
+  "bracketSameLine": false,
+  "arrowParens": "avoid",
+  "endOfLine": "lf",
+  "printWidth": 100,
+  "tabWidth": 2,
+  "useTabs": false,
+  "overrides": [
+    {
+      "files": "*.json",
+      "options": {
+        "printWidth": 80,
+        "tabWidth": 2
+      }
+    },
+    {
+      "files": "*.md",
+      "options": {
+        "printWidth": 80,
+        "proseWrap": "always",
+        "tabWidth": 2
+      }
+    },
+    {
+      "files": "*.{css,scss,less}",
+      "options": {
+        "printWidth": 120,
+        "singleQuote": true
+      }
+    },
+    {
+      "files": "*.{yml,yaml}",
+      "options": {
+        "tabWidth": 2,
+        "singleQuote": true
+      }
+    }
+  ],
+  "plugins": [
+    "@ianvs/prettier-plugin-sort-imports",
+    "prettier-plugin-sort-json",
+    "prettier-plugin-tailwindcss"
+  ],
+  "importOrder": [
+    "^react",
+    "^next",
+    "^@",
+    "^node",
+    "^[./]"
+  ],
+  "importOrderSeparation": true,
+  "importOrderSortSpecifiers": true,
+  "tailwindFunctions": [
+    "clsx",
+    "classnames",
+    "classNames"
+  ],
+  "jsonSortOrder": [
+    "name",
+    "version",
+    "description",
+    "main",
+    "module",
+    "types",
+    "typings",
+    "files",
+    "scripts",
+    "keywords",
+    "author",
+    "license",
+    "repository",
+    "bugs",
+    "homepage",
+    "dependencies",
+    "devDependencies",
+    "peerDependencies",
+    "optionalDependencies",
+    "engines",
+    "os",
+    "cpu"
+  ]
+}

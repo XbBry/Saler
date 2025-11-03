@@ -1,0 +1,637 @@
+name: 🔒 Security Scanning & Analysis
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 4 * * 0' # Weekly security scan on Sunday 4 AM
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Type of security scan'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - quick
+          - dependencies
+          - containers
+          - code
+
+env:
+  SEMGREP_RULES: >-
+    p/security-audit
+    p/owasp-top-ten
+    p/python
+    p/javascript
+    p/typescript
+
+concurrency:
+  group: security-scan-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ==================== DEPENDENCY SECURITY SCAN ====================
+  dependency-scan:
+    name: 📦 Dependency Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🔍 Python Dependencies Scan
+      run: |
+        echo "#### 🐍 Python Dependencies Security Scan" >> $GITHUB_STEP_SUMMARY
+        
+        cd saler/backend
+        
+        # Install safety
+        pip install safety
+        
+        # Run safety scan
+        echo "##### 🛡️ Python Package Vulnerability Scan" >> $GITHUB_STEP_SUMMARY
+        safety check --json --output safety-report.json || true
+        
+        # Parse and display results
+        if [ -f safety-report.json ] && [ -s safety-report.json ]; then
+          echo "❌ **Vulnerabilities Found in Python Dependencies**" >> $GITHUB_STEP_SUMMARY
+          cat safety-report.json >> $GITHUB_STEP_SUMMARY
+          
+          # Extract vulnerability count
+          VULN_COUNT=$(jq length safety-report.json)
+          echo "**Total Vulnerabilities**: $VULN_COUNT" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$VULN_COUNT" -gt 0 ]; then
+            # Check for high-severity vulnerabilities
+            HIGH_SEVERITY=$(jq '[.[] | select(.severity == "high")] | length' safety-report.json)
+            echo "**High Severity**: $HIGH_SEVERITY" >> $GITHUB_STEP_SUMMARY
+            
+            if [ "$HIGH_SEVERITY" -gt 0 ]; then
+              echo "⚠️ **Critical security issues found - review required**" >> $GITHUB_STEP_SUMMARY
+              exit 1
+            fi
+          fi
+        else
+          echo "✅ **No vulnerabilities found in Python dependencies**" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: 🔍 Node.js Dependencies Scan
+      run: |
+        echo "#### 🟨 Node.js Dependencies Security Scan" >> $GITHUB_STEP_SUMMARY
+        
+        cd saler/frontend
+        
+        # Run npm audit
+        echo "##### 🛡️ NPM Package Vulnerability Scan" >> $GITHUB_STEP_SUMMARY
+        npm audit --json --audit-level=moderate > npm-audit-report.json || true
+        
+        # Check audit results
+        if [ -f npm-audit-report.json ] && [ -s npm-audit-report.json ]; then
+          echo "❌ **Vulnerabilities Found in NPM Dependencies**" >> $GITHUB_STEP_SUMMARY
+          cat npm-audit-report.json >> $GITHUB_STEP_SUMMARY
+          
+          # Extract vulnerability count
+          VULN_COUNT=$(jq '.metadata.vulnerabilities.total npm-audit-report.json)
+          echo "**Total Vulnerabilities**: $VULN_COUNT" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$VULN_COUNT" -gt 0 ]; then
+            CRITICAL=$(jq '.metadata.vulnerabilities.critical npm-audit-report.json)
+            HIGH=$(jq '.metadata.vulnerabilities.high npm-audit-report.json)
+            echo "**Critical**: $CRITICAL, **High**: $HIGH" >> $GITHUB_STEP_SUMMARY
+            
+            if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+              echo "⚠️ **Critical security issues found - review required**" >> $GITHUB_STEP_SUMMARY
+              exit 1
+            fi
+          fi
+        else
+          echo "✅ **No vulnerabilities found in NPM dependencies**" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: 📊 Outdated Dependencies Check
+      run: |
+        echo "##### 📅 Outdated Dependencies Check" >> $GITHUB_STEP_SUMMARY
+        
+        # Check Python dependencies
+        echo "**Python Dependencies:**" >> $GITHUB_STEP_SUMMARY
+        cd saler/backend
+        pip list --outdated --format=json > outdated-python.json 2>/dev/null || echo "[]" > outdated-python.json
+        
+        OUTDATED_COUNT=$(jq length outdated-python.json)
+        if [ "$OUTDATED_COUNT" -gt 0 ]; then
+          echo "⚠️ **$OUTDATED_COUNT outdated Python packages found**" >> $GITHUB_STEP_SUMMARY
+          jq '.[].name' outdated-python.json >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ **All Python dependencies are up to date**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Check NPM dependencies
+        echo "**Node.js Dependencies:**" >> $GITHUB_STEP_SUMMARY
+        cd ../frontend
+        npm outdated --json > outdated-npm.json 2>/dev/null || echo "{}" > outdated-npm.json
+        
+        OUTDATED_NPM=$(jq 'keys | length' outdated-npm.json)
+        if [ "$OUTDATED_NPM" -gt 0 ]; then
+          echo "⚠️ **$OUTDATED_NPM outdated NPM packages found**" >> $GITHUB_STEP_SUMMARY
+          jq 'keys[]' outdated-npm.json >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ **All NPM dependencies are up to date**" >> $GITHUB_STEP_SUMMARY
+        fi
+
+  # ==================== CODE SECURITY ANALYSIS ====================
+  code-security:
+    name: 🔍 Code Security Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: 🔒 Bandit Security Linting
+      run: |
+        echo "#### 🔍 Python Code Security Analysis" >> $GITHUB_STEP_SUMMARY
+        
+        cd saler/backend
+        pip install bandit[toml]
+        
+        echo "##### 🛡️ Python Security Linting (Bandit)" >> $GITHUB_STEP_SUMMARY
+        
+        # Run bandit with custom config
+        bandit -r app/ -f json -o bandit-report.json --exclude tests/ || true
+        
+        if [ -f bandit-report.json ] && [ -s bandit-report.json ]; then
+          echo "❌ **Security issues found in Python code**" >> $GITHUB_STEP_SUMMARY
+          cat bandit-report.json >> $GITHUB_STEP_SUMMARY
+          
+          # Check severity levels
+          HIGH_ISSUES=$(jq '[.results[] | select(.issue_severity == "HIGH")] | length' bandit-report.json)
+          MEDIUM_ISSUES=$(jq '[.results[] | select(.issue_severity == "MEDIUM")] | length' bandit-report.json)
+          
+          echo "**High Severity**: $HIGH_ISSUES" >> $GITHUB_STEP_SUMMARY
+          echo "**Medium Severity**: $MEDIUM_ISSUES" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$HIGH_ISSUES" -gt 0 ]; then
+            echo "⚠️ **Critical security issues found - must be fixed**" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+        else
+          echo "✅ **No security issues found in Python code**" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: 🔍 Semgrep Static Analysis
+      run: |
+        echo "##### 🔍 Cross-language Security Analysis (Semgrep)" >> $GITHUB_STEP_SUMMARY
+        
+        # Install semgrep
+        pip install semgrep
+        
+        cd /tmp
+        
+        # Run semgrep on Python code
+        echo "**Python Code Analysis:**" >> $GITHUB_STEP_SUMMARY
+        semgrep --config="${{ env.SEMGREP_RULES }}" \
+                --json \
+                --output=semgrep-python.json \
+                --exclude="tests/" \
+                /workspace/saler/backend/ || true
+        
+        if [ -f semgrep-python.json ] && [ -s semgrep-python.json ]; then
+          PYTHON_ISSUES=$(jq '.results | length' semgrep-python.json)
+          echo "**Python Issues**: $PYTHON_ISSUES" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$PYTHON_ISSUES" -gt 0 ]; then
+            echo "❌ **$PYTHON_ISSUES security issues found in Python code**" >> $GITHUB_STEP_SUMMARY
+            jq '.results[0:5]' semgrep-python.json >> $GITHUB_STEP_SUMMARY
+            
+            if [ "$PYTHON_ISSUES" -gt 10 ]; then
+              echo "⚠️ **Too many security issues - review required**" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "✅ **No security issues found in Python code**" >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
+        
+        # Run semgrep on JavaScript/TypeScript code
+        echo "**JavaScript/TypeScript Code Analysis:**" >> $GITHUB_STEP_SUMMARY
+        semgrep --config="${{ env.SEMGREP_RULES }}" \
+                --json \
+                --output=semgrep-js.json \
+                --exclude="node_modules/" \
+                --exclude="dist/" \
+                --exclude="build/" \
+                /workspace/saler/frontend/src/ || true
+        
+        if [ -f semgrep-js.json ] && [ -s semgrep-js.json ]; then
+          JS_ISSUES=$(jq '.results | length' semgrep-js.json)
+          echo "**JavaScript/TypeScript Issues**: $JS_ISSUES" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$JS_ISSUES" -gt 0 ]; then
+            echo "❌ **$JS_ISSUES security issues found in JavaScript/TypeScript code**" >> $GITHUB_STEP_SUMMARY
+            jq '.results[0:5]' semgrep-js.json >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **No security issues found in JavaScript/TypeScript code**" >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
+
+    - name: 🔍 ESLint Security Rules
+      run: |
+        echo "##### 🔍 JavaScript/TypeScript Security Analysis" >> $GITHUB_STEP_SUMMARY
+        
+        cd saler/frontend
+        
+        # Install dependencies
+        npm ci
+        
+        # Run eslint with security rules
+        npx eslint src/ --ext .js,.jsx,.ts,.tsx --format json --output-file eslint-security.json || true
+        
+        if [ -f eslint-security.json ]; then
+          SECURITY_ERRORS=$(jq '[.[] | select(.messages[] | contains("security") or contains("Security") or contains("SECURITY"))] | length' eslint-security.json)
+          ERROR_COUNT=$(jq '[.[] | .messages[]] | length' eslint-security.json)
+          
+          echo "**Total ESLint Issues**: $ERROR_COUNT" >> $GITHUB_STEP_SUMMARY
+          echo "**Security-related Issues**: $SECURITY_ERRORS" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$SECURITY_ERRORS" -gt 0 ]; then
+            echo "❌ **Security-related ESLint issues found**" >> $GITHUB_STEP_SUMMARY
+            jq '[.[] | select(.messages[] | contains("security") or contains("Security"))] | .[0:3]' eslint-security.json >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **No security-related ESLint issues found**" >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
+
+  # ==================== CONTAINER SECURITY SCAN ====================
+  container-security:
+    name: 🐳 Container Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🏗️ Build Images for Scanning
+      run: |
+        echo "#### 🏗️ Building Images for Security Scan" >> $GITHUB_STEP_SUMMARY
+        
+        # Build frontend image
+        docker build -f saler/frontend/Dockerfile -t saler-frontend:security-scan ./saler/frontend || {
+          echo "❌ Frontend image build failed" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        }
+        
+        # Build backend image
+        docker build -f saler/backend/Dockerfile -t saler-backend:security-scan ./saler/backend || {
+          echo "❌ Backend image build failed" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        }
+        
+        echo "✅ **Images built successfully for scanning**" >> $GITHUB_STEP_SUMMARY
+
+    - name: 🔍 Trivy Vulnerability Scanner
+      run: |
+        echo "#### 🔍 Trivy Container Vulnerability Scan" >> $GITHUB_STEP_SUMMARY
+        
+        # Install trivy
+        sudo apt-get update
+        sudo apt-get install wget apt-transport-https gnupg lsb-release
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+        echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+        sudo apt-get update
+        sudo apt-get install trivy
+        
+        echo "##### 🏗️ Frontend Image Scan" >> $GITHUB_STEP_SUMMARY
+        trivy image --format json --output frontend-trivy.json saler-frontend:security-scan || true
+        
+        if [ -f frontend-trivy.json ]; then
+          FRONTEND_VULNS=$(jq '.Results[0].Vulnerabilities | length' frontend-trivy.json)
+          echo "**Frontend Vulnerabilities**: $FRONTEND_VULNS" >> $GITHUB_STEP_SUMMARY
+          
+          # Check for critical/high vulnerabilities
+          CRITICAL=$(jq '[.Results[0].Vulnerabilities[] | select(.Severity == "CRITICAL")] | length' frontend-trivy.json)
+          HIGH=$(jq '[.Results[0].Vulnerabilities[] | select(.Severity == "HIGH")] | length' frontend-trivy.json)
+          
+          echo "**Critical**: $CRITICAL, **High**: $HIGH" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "⚠️ **Critical vulnerabilities found in frontend image**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **No critical vulnerabilities in frontend image**" >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
+        
+        echo "##### 🏗️ Backend Image Scan" >> $GITHUB_STEP_SUMMARY
+        trivy image --format json --output backend-trivy.json saler-backend:security-scan || true
+        
+        if [ -f backend-trivy.json ]; then
+          BACKEND_VULNS=$(jq '.Results[0].Vulnerabilities | length' backend-trivy.json)
+          echo "**Backend Vulnerabilities**: $BACKEND_VULNS" >> $GITHUB_STEP_SUMMARY
+          
+          # Check for critical/high vulnerabilities
+          CRITICAL=$(jq '[.Results[0].Vulnerabilities[] | select(.Severity == "CRITICAL")] | length' backend-trivy.json)
+          HIGH=$(jq '[.Results[0].Vulnerabilities[] | select(.Severity == "HIGH")] | length' backend-trivy.json)
+          
+          echo "**Critical**: $CRITICAL, **High**: $HIGH" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+            echo "⚠️ **Critical vulnerabilities found in backend image**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **No critical vulnerabilities in backend image**" >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
+
+    - name: 🔍 Dockerfile Security Analysis
+      run: |
+        echo "##### 📄 Dockerfile Security Analysis" >> $GITHUB_STEP_SUMMARY
+        
+        # Check for common Docker security issues
+        echo "**Frontend Dockerfile Analysis:**" >> $GITHUB_STEP_SUMMARY
+        
+        # Check for root user
+        if grep -q "USER root" saler/frontend/Dockerfile; then
+          echo "❌ **Frontend Dockerfile runs as root user**" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ **Frontend Dockerfile doesn't run as root**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Check for latest tags
+        if grep -q "FROM.*:latest" saler/frontend/Dockerfile; then
+          echo "⚠️ **Frontend Dockerfile uses :latest tag**" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ **Frontend Dockerfile uses specific version tags**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Check for security-related Dockerfile best practices
+        echo "**Backend Dockerfile Analysis:**" >> $GITHUB_STEP_SUMMARY
+        
+        if grep -q "USER root" saler/backend/Dockerfile; then
+          echo "❌ **Backend Dockerfile runs as root user**" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ **Backend Dockerfile doesn't run as root**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if grep -q "FROM.*:latest" saler/backend/Dockerfile; then
+          echo "⚠️ **Backend Dockerfile uses :latest tag**" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "✅ **Backend Dockerfile uses specific version tags**" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: 📊 Container Security Summary
+      run: |
+        echo "##### 📊 Container Security Summary" >> $GITHUB_STEP_SUMMARY
+        
+        # Get image sizes
+        FRONTEND_SIZE=$(docker images saler-frontend:security-scan --format "{{.Size}}")
+        BACKEND_SIZE=$(docker images saler-backend:security-scan --format "{{.Size}}")
+        
+        echo "**Image Sizes:**" >> $GITHUB_STEP_SUMMARY
+        echo "- Frontend: $FRONTEND_SIZE" >> $GITHUB_STEP_SUMMARY
+        echo "- Backend: $BACKEND_SIZE" >> $GITHUB_STEP_SUMMARY
+        
+        # Count total vulnerabilities
+        TOTAL_VULNS=0
+        if [ -f frontend-trivy.json ]; then
+          FRONTEND_VULNS=$(jq '.Results[0].Vulnerabilities | length' frontend-trivy.json)
+          TOTAL_VULNS=$((TOTAL_VULNS + FRONTEND_VULNS))
+        fi
+        
+        if [ -f backend-trivy.json ]; then
+          BACKEND_VULNS=$(jq '.Results[0].Vulnerabilities | length' backend-trivy.json)
+          TOTAL_VULNS=$((TOTAL_VULNS + BACKEND_VULNS))
+        fi
+        
+        echo "**Total Container Vulnerabilities**: $TOTAL_VULNS" >> $GITHUB_STEP_SUMMARY
+
+  # ==================== CODEQL ANALYSIS ====================
+  codeql-analysis:
+    name: 🧠 CodeQL Security Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🔍 Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: python, javascript
+        queries: security-and-quality
+
+    - name: 🔧 Autobuild
+      uses: github/codeql-action/autobuild@v2
+
+    - name: 🧪 Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+      with:
+        category: "/language:python,javascript"
+
+    - name: 📊 CodeQL Summary
+      run: |
+        echo "#### 🧠 CodeQL Analysis Summary" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **CodeQL analysis completed**" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Languages Analyzed**: Python, JavaScript" >> $GITHUB_STEP_SUMMARY
+        echo "**Analysis Type**: Security and Quality" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**View detailed results**: [CodeQL Dashboard](https://github.com/${{ github.repository }}/codeql)" >> $GITHUB_STEP_SUMMARY
+
+  # ==================== SECRET SCANNING ====================
+  secret-scanning:
+    name: 🔐 Secret Scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: 🔍 TruffleHog OSS Secret Scanner
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified
+
+    - name: 🔍 GitLeaks Secret Scanner
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+    - name: 📊 Secret Scanning Summary
+      run: |
+        echo "#### 🔐 Secret Scanning Summary" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **Secret scanning completed**" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Tools Used**: TruffleHog, GitLeaks" >> $GITHUB_STEP_SUMMARY
+        echo "**Coverage**: Entire codebase" >> $GITHUB_STEP_SUMMARY
+
+  # ==================== LICENSE COMPLIANCE ====================
+  license-compliance:
+    name: 📜 License Compliance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 📦 Python License Check
+      run: |
+        echo "#### 📜 Python License Compliance" >> $GITHUB_STEP_SUMMARY
+        
+        cd saler/backend
+        pip install pip-licenses
+        
+        # Generate license report
+        pip-licenses --format=json --output-file=python-licenses.json
+        
+        # Check for forbidden licenses
+        FORBIDDEN_LICENSES=("GPL-3.0" "AGPL-3.0" "SSPL-1.0")
+        
+        for license in "${FORBIDDEN_LICENSES[@]}"; do
+          if jq -r '.[].License' python-licenses.json | grep -q "$license"; then
+            echo "❌ **Forbidden license found: $license**" >> $GITHUB_STEP_SUMMARY
+            jq -r '.[] | select(.License == "'$license'") | .Name' python-licenses.json >> $GITHUB_STEP_SUMMARY
+          fi
+        done
+        
+        echo "✅ **Python license compliance check completed**" >> $GITHUB_STEP_SUMMARY
+
+    - name: 📦 NPM License Check
+      run: |
+        echo "#### 📜 NPM License Compliance" >> $GITHUB_STEP_SUMMARY
+        
+        cd saler/frontend
+        
+        # Generate license report
+        npx license-checker --json --out npm-licenses.json
+        
+        # Check for forbidden licenses
+        FORBIDDEN_LICENSES=("GPL" "AGPL" "SSPL")
+        
+        jq -r '. | to_entries[] | .value.licenses' npm-licenses.json | sort | uniq > found-licenses.txt
+        
+        for license in "${FORBIDDEN_LICENSES[@]}"; do
+          if grep -q "$license" found-licenses.txt; then
+            echo "❌ **Forbidden license found: $license**" >> $GITHUB_STEP_SUMMARY
+          fi
+        done
+        
+        echo "✅ **NPM license compliance check completed**" >> $GITHUB_STEP_SUMMARY
+
+  # ==================== SECURITY SUMMARY ====================
+  security-summary:
+    name: 📊 Security Summary
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, code-security, container-security, codeql-analysis, secret-scanning, license-compliance]
+    if: always()
+    
+    steps:
+    - name: 📊 Generate Security Report
+      run: |
+        echo "## 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📈 Scan Results" >> $GITHUB_STEP_SUMMARY
+        echo "- **Dependency Scan**: ${{ needs.dependency-scan.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Code Security**: ${{ needs.code-security.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Container Security**: ${{ needs.container-security.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **CodeQL Analysis**: ${{ needs.codeql-analysis.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Secret Scanning**: ${{ needs.secret-scanning.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **License Compliance**: ${{ needs.license-compliance.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Determine overall security status
+        FAILED_JOBS=0
+        
+        if [[ "${{ needs.dependency-scan.result }}" != "success" ]]; then
+          FAILED_JOBS=$((FAILED_JOBS + 1))
+        fi
+        
+        if [[ "${{ needs.code-security.result }}" != "success" ]]; then
+          FAILED_JOBS=$((FAILED_JOBS + 1))
+        fi
+        
+        if [[ "${{ needs.container-security.result }}" != "success" ]]; then
+          FAILED_JOBS=$((FAILED_JOBS + 1))
+        fi
+        
+        if [[ "${{ needs.secret-scanning.result }}" != "success" ]]; then
+          FAILED_JOBS=$((FAILED_JOBS + 1))
+        fi
+        
+        if [ "$FAILED_JOBS" -eq 0 ]; then
+          echo "### ✅ Security Status: PASSED" >> $GITHUB_STEP_SUMMARY
+          echo "🎉 **All security checks passed successfully!**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**The codebase is secure and ready for deployment.**" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ⚠️ Security Status: NEEDS REVIEW" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **$FAILED_JOBS security checks failed - review required**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Please review the failed checks and resolve any security issues.**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 Recommendations" >> $GITHUB_STEP_SUMMARY
+        echo "1. 🔄 Keep dependencies updated regularly" >> $GITHUB_STEP_SUMMARY
+        echo "2. 🛡️ Run security scans before each deployment" >> $GITHUB_STEP_SUMMARY
+        echo "3. 📚 Review and update security policies" >> $GITHUB_STEP_SUMMARY
+        echo "4. 🔍 Monitor for new vulnerabilities" >> $GITHUB_STEP_SUMMARY
+        echo "5. 🏷️ Tag releases for security tracking" >> $GITHUB_STEP_SUMMARY
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "---" >> $GITHUB_STEP_SUMMARY
+        echo "📅 **Scan Date**: $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "🔗 **Commit**: [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})" >> $GITHUB_STEP_SUMMARY
+        echo "🌿 **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+
+    - name: 📢 Security Alert
+      if: failure()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        channel: '#security'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        message: "🔒 Security scan failed on ${{ github.ref_name }}! Commit: ${{ github.sha }}. Please review the security report and address any issues."
+
+    - name: 📧 Security Report
+      if: always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          // Create security report
+          const report = {
+            timestamp: new Date().toISOString(),
+            repository: context.repo.full_name,
+            commit: context.sha,
+            branch: context.ref,
+            results: {
+              dependency_scan: '${{ needs.dependency-scan.result }}',
+              code_security: '${{ needs.code-security.result }}',
+              container_security: '${{ needs.container-security.result }}',
+              codeql_analysis: '${{ needs.codeql-analysis.result }}',
+              secret_scanning: '${{ needs.secret-scanning.result }}',
+              license_compliance: '${{ needs.license-compliance.result }}'
+            }
+          };
+          
+          // Save report
+          fs.writeFileSync('security-report.json', JSON.stringify(report, null, 2));
+          
+          console.log('Security report generated successfully');

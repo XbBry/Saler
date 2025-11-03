@@ -1,0 +1,97 @@
+# OpenTelemetry Tracing Configuration for Prometheus
+# Configuration for collecting and storing OpenTelemetry metrics
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'saler-prod'
+    datacenter: 'main'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
+rule_files:
+  - "alert_rules.yml"
+  - "tracing_alert_rules.yml"
+
+# A scrape configuration containing exactly one endpoint to scrape:
+scrape_configs:
+  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # OpenTelemetry Collector configuration
+  - job_name: 'otel-collector'
+    static_configs:
+      - targets: ['otel-collector:8888']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # Backend service tracing metrics
+  - job_name: 'saler-backend-tracing'
+    static_configs:
+      - targets: ['saler-backend:8000']
+    metrics_path: '/api/v1/tracing/stats'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    honor_labels: true
+    params:
+      format: ['prometheus']
+
+  # Jaeger tracing metrics
+  - job_name: 'jaeger'
+    static_configs:
+      - targets: ['jaeger:14269']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Backend health and performance metrics
+  - job_name: 'saler-backend-health'
+    static_configs:
+      - targets: ['saler-backend:8000']
+    metrics_path: '/health/detailed'
+    scrape_interval: 30s
+    scrape_timeout: 15s
+
+  # Database connection pool metrics (if enabled)
+  - job_name: 'postgresql-tracing'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+
+  # Redis metrics (if enabled)
+  - job_name: 'redis-tracing'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 30s
+
+  # Service discovery for backend services
+  - job_name: 'backend-services'
+    dns_sd_configs:
+      - names:
+          - 'saler-backend'
+        type: 'A'
+        port: 8000
+
+# Remote write configuration for sending data to external systems
+# Uncomment and configure as needed
+# remote_write:
+#   - url: "http://remote-storage:8086/api/v1/prom/write?db=tracing"
+#     queue_config:
+#       max_samples_per_send: 1000
+#       max_shards: 200
+#       capacity: 2500
+
+# Remote read configuration for reading from external systems
+# Uncomment and configure as needed
+# remote_read:
+#   - url: "http://remote-storage:8086/api/v1/prom/read?db=tracing"
+#     read_recent: true

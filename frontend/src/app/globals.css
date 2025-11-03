@@ -1,0 +1,277 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import Inter font */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Root variables */
+:root {
+  --font-inter: 'Inter', sans-serif;
+}
+
+/* Base styles */
+@layer base {
+  html {
+    font-family: var(--font-inter);
+  }
+  
+  body {
+    @apply text-slate-900 antialiased;
+  }
+  
+  /* RTL support for Arabic */
+  [dir="rtl"] {
+    text-align: right;
+  }
+  
+  [dir="rtl"] .ltr {
+    direction: ltr;
+  }
+  
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-slate-100;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 rounded-full;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-400;
+  }
+  
+  /* Focus styles */
+  *:focus {
+    @apply outline-none ring-2 ring-blue-500 ring-offset-2;
+  }
+  
+  /* Button focus */
+  button:focus {
+    @apply ring-0;
+  }
+}
+
+/* Component styles */
+@layer components {
+  /* Loading spinner */
+  .spinner {
+    @apply inline-block h-4 w-4 animate-spin rounded-full border-2 border-solid border-current border-r-transparent;
+  }
+  
+  /* Card component */
+  .card {
+    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+  }
+  
+  .card-header {
+    @apply border-b border-slate-200 px-6 py-4;
+  }
+  
+  .card-content {
+    @apply px-6 py-4;
+  }
+  
+  .card-footer {
+    @apply border-t border-slate-200 px-6 py-4;
+  }
+  
+  /* Form inputs */
+  .form-input {
+    @apply w-full rounded-lg border border-slate-300 px-3 py-2 text-sm placeholder-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500;
+  }
+  
+  .form-select {
+    @apply w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500;
+  }
+  
+  .form-textarea {
+    @apply w-full rounded-lg border border-slate-300 px-3 py-2 text-sm placeholder-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500;
+  }
+  
+  /* Button variants */
+  .btn {
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  
+  .btn-primary {
+    @apply bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500;
+  }
+  
+  .btn-secondary {
+    @apply bg-slate-100 text-slate-900 hover:bg-slate-200 focus:ring-slate-500;
+  }
+  
+  .btn-outline {
+    @apply border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 focus:ring-slate-500;
+  }
+  
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
+  }
+  
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+  
+  .btn-lg {
+    @apply px-6 py-3 text-base;
+  }
+  
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  
+  .badge-primary {
+    @apply bg-blue-100 text-blue-800;
+  }
+  
+  .badge-success {
+    @apply bg-green-100 text-green-800;
+  }
+  
+  .badge-warning {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+  
+  .badge-danger {
+    @apply bg-red-100 text-red-800;
+  }
+  
+  .badge-secondary {
+    @apply bg-slate-100 text-slate-800;
+  }
+  
+  /* Table */
+  .table {
+    @apply w-full border-collapse;
+  }
+  
+  .table th {
+    @apply border-b border-slate-200 bg-slate-50 px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500;
+  }
+  
+  .table td {
+    @apply border-b border-slate-200 px-6 py-4 whitespace-nowrap text-sm text-slate-900;
+  }
+  
+  /* Modal overlay */
+  .modal-overlay {
+    @apply fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm;
+  }
+  
+  .modal-content {
+    @apply relative mx-auto mt-8 w-full max-w-md rounded-lg bg-white shadow-xl;
+  }
+  
+  /* Toast positioning for RTL */
+  [dir="rtl"] .toast-wrapper {
+    @apply left-auto right-4;
+  }
+  
+  /* Navigation */
+  .nav-link {
+    @apply flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors;
+  }
+  
+  .nav-link-active {
+    @apply bg-blue-100 text-blue-700;
+  }
+  
+  .nav-link-inactive {
+    @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900;
+  }
+}
+
+/* Utility classes */
+@layer utilities {
+  /* Animation utilities */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+  
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+  
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+  
+  /* Text direction utilities */
+  .text-start {
+    text-align: start;
+  }
+  
+  .text-end {
+    text-align: end;
+  }
+}
+
+/* Keyframe animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .card {
+    @apply border-2 border-black;
+  }
+  
+  .btn {
+    @apply border-2 border-current;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,388 @@
+# Alertmanager Configuration for Tracing Alerts
+# Advanced alert routing and notification configuration
+
+global:
+  # Global SMTP settings
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'alerts@saler.com'
+  smtp_auth_username: 'alerts@saler.com'
+  smtp_auth_password: 'your-app-password'
+  smtp_require_tls: true
+
+  # HTTP settings for webhooks
+  http_config:
+    proxy_url: 'http://proxy:8080'
+
+# Templates for alert messages
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Alert routing configuration
+route:
+  # Default route
+  group_by: ['alertname', 'service_name', 'operation_name']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'default-notifications'
+  
+  # Specific routes for different alert types
+  routes:
+    # Critical alerts
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 5s
+      group_interval: 2m
+      repeat_interval: 15m
+    
+    # Performance alerts
+    - match:
+        team: performance
+      receiver: 'performance-alerts'
+      group_by: ['operation_name']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 2h
+    
+    # Security alerts
+    - match:
+        team: security
+      receiver: 'security-alerts'
+      group_wait: 10s
+      group_interval: 5m
+      repeat_interval: 30m
+    
+    # Database alerts
+    - match:
+        team: database
+      receiver: 'database-alerts'
+      group_by: ['database', 'operation']
+      group_wait: 30s
+      group_interval: 10m
+      repeat_interval: 1h
+    
+    # Backend service alerts
+    - match_re:
+        service_name: 'saler-backend'
+      receiver: 'backend-alerts'
+      group_by: ['alertname']
+      group_wait: 30s
+      group_interval: 10m
+      repeat_interval: 2h
+
+# Inhibition rules - suppress certain alerts when others are firing
+inhibit_rules:
+  # If service is completely down, ignore specific error alerts
+  - source_match:
+      alertname: 'ServiceUnavailable'
+    target_match:
+      alertname: ['HighErrorRate', 'SlowRequests', 'DatabaseSlowQueries']
+    equal: ['service_name']
+  
+  # If critical error rate is high, suppress warning level error alerts
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'service_name']
+  
+  # If database is down, suppress all database-related alerts
+  - source_match:
+      alertname: 'DatabaseDown'
+    target_match_re:
+      alertname: ['DatabaseSlowQueries', 'DatabaseConnectionPoolExhausted']
+    equal: ['database']
+
+# Receivers configuration
+receivers:
+  # Default notifications
+  - name: 'default-notifications'
+    email_configs:
+      - to: 'devops@saler.com'
+        subject: '[Saler Alert] {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Severity: {{ .Labels.severity }}
+          Service: {{ .Labels.service_name }}
+          Operation: {{ .Labels.operation_name }}
+          Time: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+          Runbook: {{ .Annotations.runbook_url }}
+          {{ end }}
+        send_resolved: true
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#alerts'
+        title: 'Saler Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Severity:* {{ .Labels.severity }}
+          *Service:* {{ .Labels.service_name }}
+          *Description:* {{ .Annotations.description }}
+          *Time:* {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+          {{ end }}
+        send_resolved: true
+
+  # Critical alerts - immediate notification
+  - name: 'critical-alerts'
+    # Multiple notification channels for critical alerts
+    email_configs:
+      - to: 'critical-alerts@saler.com'
+        subject: '[CRITICAL] Saler Alert - {{ .GroupLabels.alertname }}'
+        body: |
+          🔴 CRITICAL ALERT 🔴
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Severity: {{ .Labels.severity }}
+          Service: {{ .Labels.service_name }}
+          Operation: {{ .Labels.operation_name }}
+          Time: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+          Runbook: {{ .Annotations.runbook_url }}
+          {{ end }}
+          
+          This is a CRITICAL alert requiring immediate attention.
+        send_resolved: true
+    
+    # PagerDuty integration
+    pagerduty_configs:
+      - routing_key: 'your-pagerduty-routing-key'
+        description: 'Saler Critical Alert: {{ .GroupLabels.alertname }}'
+        details:
+          alert: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+          severity: 'critical'
+          service: '{{ range .Alerts }}{{ .Labels.service_name }}{{ end }}'
+    
+    # SMS notifications for critical alerts
+    webhook_configs:
+      - url: 'https://hooks.twilio.com/services/YOUR/SMS/WEBHOOK'
+        send_resolved: false  # Only send alerts, not resolutions for SMS
+
+  # Performance alerts
+  - name: 'performance-alerts'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#performance'
+        title: 'Performance Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          ⚡ Performance Alert ⚡
+          
+          {{ range .Alerts }}
+          *Operation:* {{ .Labels.operation_name }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Service:* {{ .Labels.service_name }}
+          *Time:* {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+          {{ end }}
+        send_resolved: true
+    
+    email_configs:
+      - to: 'performance-team@saler.com'
+        subject: '[Performance] Saler Alert - {{ .GroupLabels.alertname }}'
+        body: |
+          Performance Alert - {{ .GroupLabels.alertname }}
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Operation: {{ .Labels.operation_name }}
+          Service: {{ .Labels.service_name }}
+          Time: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+          {{ end }}
+
+  # Security alerts
+  - name: 'security-alerts'
+    # Security team notification
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SECURITY/SLACK/WEBHOOK'
+        channel: '#security'
+        title: 'Security Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          🔒 Security Alert 🔒
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Severity: {{ .Labels.severity }}
+          Service: {{ .Labels.service_name }}
+          Time: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+          {{ end }}
+        send_resolved: true
+    
+    # Direct to security team
+    email_configs:
+      - to: 'security-team@saler.com'
+        subject: '[SECURITY] Saler Alert - {{ .GroupLabels.alertname }}'
+        body: |
+          🔒 SECURITY ALERT 🔒
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Severity: {{ .Labels.severity }}
+          Service: {{ .Labels.service_name }}
+          Time: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+          {{ end }}
+          
+          Please investigate immediately.
+
+  # Database alerts
+  - name: 'database-alerts'
+    email_configs:
+      - to: 'database-team@saler.com'
+        subject: '[Database] Saler Alert - {{ .GroupLabels.alertname }}'
+        body: |
+          Database Alert - {{ .GroupLabels.alertname }}
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Database: {{ .Labels.database }}
+          Operation: {{ .Labels.operation }}
+          Time: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+          {{ end }}
+    
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/DB/SLACK/WEBHOOK'
+        channel: '#database'
+        title: 'Database Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          🗄️ Database Alert 🗄️
+          
+          {{ range .Alerts }}
+          *Database:* {{ .Labels.database }}
+          *Operation:* {{ .Labels.operation }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+        send_resolved: true
+
+  # Backend service alerts
+  - name: 'backend-alerts'
+    # Development team notification
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/DEV/SLACK/WEBHOOK'
+        channel: '#backend'
+        title: 'Backend Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          🛠️ Backend Service Alert 🛠️
+          
+          {{ range .Alerts }}
+          *Service:* {{ .Labels.service_name }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Time:* {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+          {{ end }}
+        send_resolved: true
+    
+    # Microsoft Teams integration
+    webhook_configs:
+      - url: 'https://outlook.office.com/webhook/YOUR/TEAMS/WEBHOOK'
+        title: 'Backend Service Alert'
+        text: |
+          Backend Service Alert - {{ .GroupLabels.alertname }}
+          
+          {{ range .Alerts }}
+          Service: {{ .Labels.service_name }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          {{ end }}
+
+# Time-based notification policies
+time_intervals:
+  # Business hours
+  - name: 'business-hours'
+    time_intervals:
+      - times:
+          - start_time: '09:00'
+            end_time: '17:00'
+        weekdays: ['monday:friday']
+        location: 'UTC'
+  
+  # After hours
+  - name: 'after-hours'
+    time_intervals:
+      - times:
+          - start_time: '17:00'
+            end_time: '09:00'
+        weekdays: ['monday:friday']
+        location: 'UTC'
+      - times:
+          - start_time: '00:00'
+            end_time: '23:59'
+        weekdays: ['saturday', 'sunday']
+        location: 'UTC'
+
+# Multi-tenant notification routing
+tenant_routes:
+  # Multi-tenant alert routing based on labels
+  - match:
+      tenant: 'enterprise'
+    receiver: 'enterprise-notifications'
+  
+  - match:
+      tenant: 'standard'
+    receiver: 'standard-notifications'
+
+# Service-specific routing
+service_routes:
+  # Critical services get immediate notification
+  - match:
+      service_type: 'critical'
+    receiver: 'critical-services'
+  
+  # Non-critical services get delayed notification
+  - match:
+      service_type: 'standard'
+    receiver: 'standard-services'
+
+# High availability configuration
+high_availability:
+  cluster:
+    peers:
+      - alertmanager1:9093
+      - alertmanager2:9093
+      - alertmanager3:9093
+    timeout: 15s
+    api_version: v2
+
+# Advanced notification templates
+templates:
+  - |
+    {{ define "email.subject" }}
+    [{{ .Status | toUpper }}] {{ .GroupLabels.alertname }} - {{ .GroupLabels.service_name }}
+    {{ end }}
+    
+    {{ define "email.body" }}
+    {{ if .Alerts }}
+    {{ range .Alerts }}
+    Alert: {{ .Annotations.summary }}
+    Description: {{ .Annotations.description }}
+    Severity: {{ .Labels.severity }}
+    Service: {{ .Labels.service_name }}
+    Operation: {{ .Labels.operation_name }}
+    Time: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+    {{ if .Annotations.runbook_url }}
+    Runbook: {{ .Annotations.runbook_url }}
+    {{ end }}
+    {{ end }}
+    {{ end }}
+    {{ end }}
+    
+    {{ define "slack.title" }}
+    {{ if .CommonAnnotations.summary }}{{ .CommonAnnotations.summary }}{{ else }}{{ .CommonLabels.alertname }}{{ end }}
+    {{ end }}
+    
+    {{ define "slack.text" }}
+    {{ range .Alerts }}
+    Alert: {{ .Annotations.summary }}
+    Description: {{ .Annotations.description }}
+    Severity: {{ .Labels.severity }}
+    Service: {{ .Labels.service_name }}
+    Time: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+    {{ end }}
+    {{ end }}

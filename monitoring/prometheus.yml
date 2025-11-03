@@ -1,0 +1,387 @@
+# Prometheus Configuration for High-Scale System and Application Monitoring
+# إعداد Prometheus المتقدم لدعم millions من metrics daily
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  
+  # إعدادات الأداء للـ High-Scale metrics
+  external_labels:
+    cluster: 'saler-production'
+    environment: 'production'
+    prometheus: 'saler-prometheus'
+  
+  # إعدادات Storage للـ High-Volume metrics
+  storage:
+    tsdb:
+      retention.time: 30d
+      retention.size: 50GB
+      min-block-duration: 2h
+      max-block-duration: 36h
+  
+  # إعدادات Remote Write لدعم High-Volume data
+  remote_write:
+    - url: "http://remote-storage:8086/api/v1/prom/write?db=prometheus"
+      queue_config:
+        max_samples_per_send: 10000
+        max_shards: 200
+        capacity: 25000
+      write_relabel_configs:
+        - source_labels: [__name__]
+          regex: 'saler_.*'
+          target_label: metrics_category
+          replacement: 'business'
+  
+  # إعدادات Remote Read للمرونة
+  remote_read:
+    - url: "http://remote-storage:8086/api/v1/prom/read?db=prometheus"
+      read_recent: true
+
+rule_files:
+  - "alert-rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# تكوين Scraper للـ High-Scale Metrics Collection
+scrape_configs:
+  # Prometheus Self-Monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    
+    # إضافة relabeling للـ High-Scale organization
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'prometheus_.*'
+        target_label: metrics_family
+        replacement: 'prometheus_internal'
+
+  # High-Frequency System Metrics (Critical Infrastructure)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 5s  # High frequency for critical metrics
+    metrics_path: /metrics
+    scrape_timeout: 3s
+    
+    # إعدادات للـ High-Volume metrics
+    sample_limit: 10000
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'node_.*'
+        target_label: metrics_family
+        replacement: 'infrastructure'
+
+  # High-Priority Application Metrics
+  - job_name: 'saler-backend'
+    static_configs:
+      - targets: ['backend:8000']
+    metrics_path: /metrics
+    scrape_interval: 5s  # High frequency for application metrics
+    scrape_timeout: 4s
+    
+    # إعدادات الـ High-Scale metrics
+    sample_limit: 50000  # دعم حتى 50K metric per scrape
+    honor_labels: false
+    
+    # Relabeling للاستعلامات المتقدمة
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'saler_.*'
+        target_label: metrics_family
+        replacement: 'application'
+        action: replace
+      - source_labels: [environment]
+        target_label: deployment_environment
+        replacement: '${1}'
+        regex: '(.+)'
+      - source_labels: [method]
+        target_label: http_method
+        replacement: '${1}'
+        regex: '(.+)'
+
+  # Medium-Priority Frontend Metrics
+  - job_name: 'saler-frontend'
+    static_configs:
+      - targets: ['frontend:3000']
+    metrics_path: /api/metrics
+    scrape_interval: 10s
+    scrape_timeout: 8s
+    
+    sample_limit: 10000
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'frontend_.*'
+        target_label: metrics_family
+        replacement: 'frontend'
+
+  # Database Performance Metrics
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 10s
+    scrape_timeout: 8s
+    
+    sample_limit: 15000
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'pg_.*'
+        target_label: metrics_family
+        replacement: 'database'
+        action: replace
+      - source_labels: [datname]
+        target_label: database_name
+        replacement: '${1}'
+        regex: '(.+)'
+
+  # Redis Performance Metrics
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 10s
+    scrape_timeout: 8s
+    
+    sample_limit: 10000
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'redis_.*'
+        target_label: metrics_family
+        replacement: 'cache'
+        action: replace
+
+  # Business Metrics (High-Volume Custom Metrics)
+  - job_name: 'business-metrics'
+    static_configs:
+      - targets: ['backend:8000']
+    metrics_path: /api/v1/metrics
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    
+    # إعدادات خاصة للـ Business Metrics
+    sample_limit: 100000  # دعم حتى 100K business metrics per scrape
+    honor_labels: true
+    
+    # Filtering للـ business metrics فقط
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'saler_(leads|revenue|conversion|user|business)_.*'
+        target_label: metrics_family
+        replacement: 'business'
+        action: keep
+      - source_labels: [__name__]
+        regex: 'saler_(leads|revenue|conversion).*'
+        target_label: business_category
+        replacement: '${1}'
+        regex: 'saler_([^_]+)_.*'
+
+  # Security Metrics (Medium Frequency)
+  - job_name: 'security-monitoring'
+    static_configs:
+      - targets: ['backend:8000']
+    metrics_path: /api/v1/metrics/security
+    scrape_interval: 20s
+    scrape_timeout: 15s
+    
+    sample_limit: 20000
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'saler_security_.*'
+        target_label: metrics_family
+        replacement: 'security'
+        action: keep
+      - source_labels: [event_type]
+        target_label: security_event_type
+        replacement: '${1}'
+        regex: '(.+)'
+
+  # Performance Metrics (Real-time)
+  - job_name: 'performance-metrics'
+    static_configs:
+      - targets: ['backend:8000']
+    metrics_path: /api/v1/metrics/performance
+    scrape_interval: 5s  # High frequency for performance
+    scrape_timeout: 3s
+    
+    sample_limit: 50000
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'saler_(cpu|memory|disk|database_query|cache)_.*'
+        target_label: metrics_family
+        replacement: 'performance'
+        action: keep
+
+  # User Analytics Metrics
+  - job_name: 'user-analytics'
+    static_configs:
+      - targets: ['backend:8000']
+    metrics_path: /api/v1/metrics/users
+    scrape_interval: 30s
+    scrape_timeout: 20s
+    
+    sample_limit: 30000
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'saler_(user|session|feature_usage)_.*'
+        target_label: metrics_family
+        replacement: 'user_behavior'
+        action: keep
+
+  # Low-Priority Infrastructure Metrics
+  - job_name: 'infra-monitoring'
+    static_configs:
+      - targets: ['localhost:3001', 'localhost:3002', 'localhost:3003']
+    metrics_path: /metrics
+    scrape_interval: 60s  # Low frequency for non-critical metrics
+    scrape_timeout: 30s
+    
+    sample_limit: 5000
+
+# إعدادات Storage المتقدمة للـ High-Scale Metrics
+storage:
+  tsdb:
+    # إعداداتRetention للـ High-Volume environment
+    retention.time: 30d  # الاحتفاظ بالبيانات لمدة 30 يوم
+    retention.size: 100GB  # الحد الأقصى لحجم البيانات
+    
+    # إعدادات WAL للتأكد من عدم فقدان البيانات
+    wal-compression: true
+    min-block-duration: 2h
+    max-block-duration: 36h
+    
+    # إعدادات للـ High-Performance writing
+    allow-overlapping-blocks: false
+    
+    # إعدادات للـ Query Optimization
+    query-timeout: 5m
+    query-max-concurrency: 40
+    max-concurrency: 40
+
+# إعدادات الـ Query Optimization
+query:
+  # Timeouts for complex queries
+  timeout: 5m
+  
+  # Maximum concurrent queries
+  max-concurrency: 40
+  
+  # Query logging
+  enable-query-logging: true
+  
+  # Web interface optimizations
+  web:
+    max-connections: 512
+    read-timeout: 5m
+
+# إعدادات الـ Alerting المتقدمة
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+      
+      # إعدادات للـ High-Volume alerting
+      timeout: 10s
+      api_version: v2
+      
+      # إعدادات الـ High-Availability
+      scheme: http
+      path_prefix: /
+      
+      # إعدادات للـ Load Balancing
+      static_configs:
+        - targets:
+          - alertmanager-1:9093
+          - alertmanager-2:9093
+
+# إعدادات الـ Rules للتحديث السريع
+rule_files:
+  - "alert-rules.yml"
+  - "recording-rules.yml"  # للـ Pre-computed metrics
+
+# إعدادات الـ Scrape Discovery للإدارة السهلة
+scrape_configs:
+  # Discovery-based scraping for scalability
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+    
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        target_label: __address__
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+
+# إعدادات الـ Federation للـ Multi-Cluster Setup
+federate:
+  - job_name: 'federate'
+    scrape_interval: 30s
+    honor_labels: true
+    
+    static_configs:
+      - targets: 
+        - 'remote-prometheus-1:9090'
+        - 'remote-prometheus-2:9090'
+    
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'saler_.*'
+        target_label: cluster
+        replacement: 'source-cluster'
+
+# إعدادات الـ High-Availability
+high_availability:
+  # Replication settings
+  replication_factor: 2
+  
+  # Consistency settings
+  consistency_timeout: 2s
+  
+  # Error handling
+  max-error-rate: 0.01
+  max-latency: 1s
+
+# إعدادات الـ Monitoring والإدارة
+monitoring:
+  # Self-monitoring
+  self:
+    enabled: true
+    scrape_interval: 30s
+  
+  # Performance monitoring
+  performance:
+    enabled: true
+    metrics_path: /-/metrics
+    scrape_interval: 15s
+
+# إعدادات الـ Security للـ High-Scale Environment
+security:
+  # TLS settings
+  tls:
+    enabled: true
+    cert_file: /etc/prometheus/tls/prometheus.crt
+    key_file: /etc/prometheus/tls/prometheus.key
+  
+  # Auth settings
+  auth:
+    enabled: true
+    basic_auth_file: /etc/prometheus/auth/users
+  
+  # Rate limiting
+  rate_limit:
+    requests_per_second: 1000
+    burst_size: 2000

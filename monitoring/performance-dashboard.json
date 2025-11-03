@@ -1,0 +1,459 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "لوحة مراقبة الأداء - Performance Monitoring Dashboard",
+    "tags": ["performance", "monitoring", "dashboard"],
+    "timezone": "UTC",
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "وقت الاستجابة - Response Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "avg(http_request_duration_seconds) * 1000",
+            "legendFormat": "متوسط وقت الاستجابة (ms)",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+            "legendFormat": "P50 (ms)",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+            "legendFormat": "P95 (ms)",
+            "refId": "C"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+            "legendFormat": "P99 (ms)",
+            "refId": "D"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "yAxes": [
+          {"min": 0, "unit": "ms"}
+        ],
+        "alert": {
+          "conditions": [
+            {"query": {"queryType": "", "refId": "C"}, "reducer": {"params": [], "type": "avg"},
+             "evaluator": {"params": [2000], "type": "gt"}}
+          ],
+          "executionErrorState": "alerting",
+          "for": "2m",
+          "frequency": "30s",
+          "handler": 1,
+          "name": "وقت الاستجابة عالي",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 2,
+        "title": "معدل الطلبات - Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[5m]))",
+            "legendFormat": "إجمالي الطلبات (req/s)",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(http_requests_total{status_code=~\"2..\"}[5m]))",
+            "legendFormat": "طلبات ناجحة (req/s)",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(rate(http_requests_total{status_code=~\"4..\"}[5m]))",
+            "legendFormat": "طلبات العميل (req/s)",
+            "refId": "C"
+          },
+          {
+            "expr": "sum(rate(http_requests_total{status_code=~\"5..\"}[5m]))",
+            "legendFormat": "أخطاء الخادم (req/s)",
+            "refId": "D"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "yAxes": [
+          {"min": 0, "unit": "reqps"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "استخدام المعالج - CPU Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+            "legendFormat": "استخدام المعالج (%)",
+            "refId": "A"
+          },
+          {
+            "expr": "avg(rate(node_cpu_seconds_total{mode=\"user\"}[5m])) * 100",
+            "legendFormat": "المستخدم (%)",
+            "refId": "B"
+          },
+          {
+            "expr": "avg(rate(node_cpu_seconds_total{mode=\"system\"}[5m])) * 100",
+            "legendFormat": "النظام (%)",
+            "refId": "C"
+          },
+          {
+            "expr": "avg(rate(node_cpu_seconds_total{mode=\"iowait\"}[5m])) * 100",
+            "legendFormat": "انتظار I/O (%)",
+            "refId": "D"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "yAxes": [
+          {"min": 0, "max": 100, "unit": "percent"}
+        ]
+      },
+      {
+        "id": 4,
+        "title": "استخدام الذاكرة - Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "100 * (1 - (avg_over_time(node_memory_MemAvailable_bytes[5m]) / avg_over_time(node_memory_MemTotal_bytes[5m])))",
+            "legendFormat": "استخدام الذاكرة (%)",
+            "refId": "A"
+          },
+          {
+            "expr": "avg_over_time(node_memory_MemTotal_bytes[5m]) / 1024/1024/1024",
+            "legendFormat": "إجمالي الذاكرة (GB)",
+            "refId": "B"
+          },
+          {
+            "expr": "avg_over_time(node_memory_MemAvailable_bytes[5m]) / 1024/1024/1024",
+            "legendFormat": "الذاكرة المتاحة (GB)",
+            "refId": "C"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "yAxes": [
+          {"min": 0, "max": 100, "unit": "percent"}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "أداء قاعدة البيانات - Database Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "avg(database_query_duration_seconds) * 1000",
+            "legendFormat": "متوسط وقت الاستعلام (ms)",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(database_query_duration_seconds_bucket[5m])) by (le)) * 1000",
+            "legendFormat": "P95 وقت الاستعلام (ms)",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(rate(database_queries_total[5m]))",
+            "legendFormat": "عدد الاستعلامات (q/s)",
+            "refId": "C"
+          },
+          {
+            "expr": "sum(rate(database_errors_total[5m]))",
+            "legendFormat": "أخطاء قاعدة البيانات (err/s)",
+            "refId": "D"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "yAxes": [
+          {"min": 0, "unit": "ms"}
+        ]
+      },
+      {
+        "id": 6,
+        "title": "أداء Redis Cache",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "avg(redis_operation_duration_seconds) * 1000",
+            "legendFormat": "متوسط وقت العملية (ms)",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(redis_operations_total[5m]))",
+            "legendFormat": "عدد العمليات (op/s)",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(rate(redis_cache_hits_total[5m])) / (sum(rate(redis_cache_hits_total[5m])) + sum(rate(redis_cache_misses_total[5m]))) * 100",
+            "legendFormat": "معدل نجاح التخزين المؤقت (%)",
+            "refId": "C"
+          },
+          {
+            "expr": "redis_memory_used_bytes / 1024/1024",
+            "legendFormat": "الذاكرة المستخدمة (MB)",
+            "refId": "D"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "yAxes": [
+          {"min": 0, "unit": "ms"}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Web Vitals",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "avg(web_vitals_lcp_seconds) * 1000",
+            "legendFormat": "Largest Contentful Paint (ms)",
+            "refId": "A"
+          },
+          {
+            "expr": "avg(web_vitals_fid_milliseconds)",
+            "legendFormat": "First Input Delay (ms)",
+            "refId": "B"
+          },
+          {
+            "expr": "avg(web_vitals_cls) * 1000",
+            "legendFormat": "Cumulative Layout Shift (ms)",
+            "refId": "C"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "yAxes": [
+          {"min": 0, "unit": "ms"}
+        ]
+      },
+      {
+        "id": 8,
+        "title": "أخطاء الأداء - Performance Errors",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(performance_errors_total[5m]))",
+            "legendFormat": "أخطاء الأداء (err/s)",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(timeouts_total[5m]))",
+            "legendFormat": "انتهاء الوقت (timeout/s)",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(rate(slow_queries_total[5m]))",
+            "legendFormat": "استعلامات بطيئة (q/s)",
+            "refId": "C"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "yAxes": [
+          {"min": 0, "unit": "ops"}
+        ]
+      },
+      {
+        "id": 9,
+        "title": "الخدمات النشطة - Active Services",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "count(up == 1)",
+            "legendFormat": "الخدمات النشطة",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 32},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 2},
+                {"color": "green", "value": 3}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "معدل النجاح - Success Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{status_code=~\"2..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+            "legendFormat": "معدل النجاح (%)",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 32},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 90},
+                {"color": "green", "value": 95}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "متوسط وقت الاستجابة - Avg Response Time",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg(http_request_duration_seconds) * 1000",
+            "legendFormat": "متوسط وقت الاستجابة (ms)",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 32},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 1000},
+                {"color": "red", "value": 2000}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "معدل استخدام المعالج - CPU Usage Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg(cpu_usage_percent)",
+            "legendFormat": "متوسط استخدام المعالج (%)",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 32},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 70},
+                {"color": "red", "value": 90}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 13,
+        "title": "اتجاهات الأداء - Performance Trends",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "avg(http_request_duration_seconds) * 1000",
+            "legendFormat": "وقت الاستجابة (ms)",
+            "refId": "A"
+          },
+          {
+            "expr": "avg(cpu_usage_percent)",
+            "legendFormat": "استخدام المعالج (%)",
+            "refId": "B"
+          },
+          {
+            "expr": "avg(memory_usage_percent)",
+            "legendFormat": "استخدام الذاكرة (%)",
+            "refId": "C"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 36},
+        "yAxes": [
+          {"min": 0, "unit": "ms"}
+        ]
+      },
+      {
+        "id": 14,
+        "title": "خرائط الحرارة - Heatmaps",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "sum(rate(http_request_duration_seconds_bucket[5m])) by (le)",
+            "legendFormat": "توزيع أوقات الاستجابة",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 44}
+      },
+      {
+        "id": 15,
+        "title": "تفاصيل العمليات - Process Details",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "topk(10, sum(rate(http_requests_total[5m])) by (endpoint))",
+            "legendFormat": "أهم endpoints",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 44}
+      }
+    ],
+    "time": {"from": "now-1h", "to": "now"},
+    "templating": {
+      "list": [
+        {
+          "name": "datasource",
+          "type": "datasource",
+          "query": "prometheus",
+          "current": {"value": "Prometheus", "text": "Prometheus"}
+        },
+        {
+          "name": "environment",
+          "type": "custom",
+          "options": [
+            {"text": "Production", "value": "production", "selected": true},
+            {"text": "Staging", "value": "staging", "selected": false},
+            {"text": "Development", "value": "development", "selected": false}
+          ]
+        },
+        {
+          "name": "service",
+          "type": "query",
+          "datasource": "Prometheus",
+          "query": "label_values(up, service)",
+          "refresh": 1,
+          "sort": 1,
+          "multi": true,
+          "includeAll": true
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Deployments",
+          "datasource": "Prometheus",
+          "expr": "changes(deployment_timestamp[1m]) > 0",
+          "titleFormat": "Deployment",
+          "textFormat": "Deployment at {{instance}}",
+          "iconColor": "green"
+        },
+        {
+          "name": "Errors",
+          "datasource": "Prometheus",
+          "expr": "increase(http_requests_total{status_code=~\"5..\"}[5m]) > 10",
+          "titleFormat": "High Error Rate",
+          "textFormat": "{{service}} has high error rate",
+          "iconColor": "red"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,354 @@
+# OpenTelemetry Collector Configuration
+# Receivers, Processors, and Exporters for distributed tracing
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - "http://localhost:3000"
+            - "http://localhost:16686"
+            - "http://localhost:9411"
+            - "http://localhost:8086"
+
+  # Jaeger receivers
+  jaeger:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:14250
+      thrift_http:
+        endpoint: 0.0.0.0:14268
+      thrift_udp:
+        endpoint: 0.0.0.0:6831
+        max_packet_size: 65000
+      thrift_compact:
+        endpoint: 0.0.0.0:6832
+        max_packet_size: 65000
+
+  # Zipkin receiver
+  zipkin:
+    endpoint: 0.0.0.0:9411
+
+  # Zipkin HTTP receiver
+  zipkin_http:
+    endpoint: 0.0.0.0:9411
+
+  # OpenTelemetry Protocol HTTP
+  otlphttp:
+    endpoint: 0.0.0.0:4318
+
+  # Prometheus receiver (for metrics)
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'otel-collector'
+          scrape_interval: 10s
+          static_configs:
+            - targets: ['0.0.0.0:8888']
+        - job_name: 'saler-backend'
+          scrape_interval: 15s
+          static_configs:
+            - targets: ['saler-backend:8000']
+          metrics_path: '/api/v1/tracing/stats'
+
+  # Host metrics receiver
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu:
+      memory:
+      disk:
+      filesystem:
+      network:
+
+  # Docker stats receiver
+  dockerstats:
+    endpoint: unix:///var/run/docker.sock
+    collection_interval: 30s
+    metrics:
+      container_cpu_usage_seconds_total:
+        enabled: true
+      container_memory_working_set_bytes:
+        enabled: true
+      container_network_rx_bytes_total:
+        enabled: true
+      container_network_tx_bytes_total:
+        enabled: true
+
+processors:
+  # Batch processor for efficient data transmission
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+
+  # Memory limiter to prevent OOM
+  memory_limiter:
+    limit_mib: 512
+    spike_limit_mib: 128
+    check_interval: 5s
+
+  # Resource processor to add service information
+  resource:
+    attributes:
+      - key: service.name
+        from_attribute: service_name
+        action: upsert
+      - key: service.version
+        from_attribute: service_version
+        action: upsert
+      - key: service.environment
+        from_attribute: environment
+        action: upsert
+
+  # Attribute processor to add custom attributes
+  attributes:
+    actions:
+      - key: deployment.environment
+        value: production
+        action: insert
+      - key: team
+        value: platform
+        action: insert
+      - key: region
+        value: us-east-1
+        action: insert
+
+  # Filter processor to exclude certain traces
+  filter:
+    traces:
+      span:
+        - 'attributes["http.method"] != "OPTIONS"'
+        - 'attributes["http.method"] != "HEAD"'
+        - 'resource.attributes["service.name"] != "otel-collector"'
+
+  # Resource detection processor
+  resourcedetection:
+    detectors: [env, system]
+    timeout: 5s
+
+  # Span processor to add custom attributes
+  span:
+    attributes:
+      - key: custom.attribute
+        value: "custom-value"
+        action: upsert
+
+exporters:
+  # Jaeger exporter
+  jaeger:
+    endpoint: jaeger:14250
+    tls:
+      insecure: true
+    queue_size: 1000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 10s
+      max_interval: 60s
+      max_elapsed_time: 300s
+
+  # OpenTelemetry Protocol exporter (for Jaeger)
+  otlp:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+    queue_size: 1000
+    retry_on_failure:
+      enabled: true
+      initial_interval: 10s
+      max_interval: 60s
+      max_elapsed_time: 300s
+
+  # Zipkin exporter
+  zipkin:
+    endpoint: http://zipkin:9411/api/v2/spans
+    timeout: 10s
+
+  # Elasticsearch exporter for Jaeger storage
+  elasticsearch:
+    endpoints: [http://elasticsearch:9200]
+    index: jaeger-span
+    timeout: 10s
+    pipeline: ""
+    bulk_size: 5
+
+  # Prometheus exporter (for metrics)
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    const_labels:
+      cluster: 'saler-prod'
+      datacenter: 'main'
+    metric_expiration: 30m
+    namespace: "otel"
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # Logging exporter (for debugging)
+  logging:
+    loglevel: info
+    loglevel: debug  # Enable debug logging in development
+
+  # File exporter (for backup)
+  file:
+    path: /var/lib/otel-collector/traces.jsonl
+    rotation_max_megabytes: 100
+    rotation_max_files: 5
+
+  # OTLP HTTP exporter
+  otlphttp:
+    endpoint: https://api.saler.com/v1/traces
+    headers:
+      api-key: "your-api-key-here"
+    timeout: 10s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 10s
+      max_interval: 60s
+      max_elapsed_time: 300s
+
+  # Datadog exporter (if using Datadog APM)
+  datadog:
+    api:
+      key: "your-datadog-api-key"
+      site: datadoghq.com
+    traces:
+      endpoint: "https://trace.agent.datadoghq.com"
+      tcp_keep_alive: 30s
+      tcp_keep_alive_timeout: 2s
+      max_connections_per_host: 5
+      split_spans_by_service: true
+      span_name_remappings:
+        http.server: "http.request"
+        rpc.server: "rpc.request"
+        faas.invocation: "faas.invocation"
+    metrics:
+      endpoint: "https://api.datadoghq.com"
+      tcp_keep_alive: 30s
+      tcp_keep_alive_timeout: 2s
+      max_connections_per_host: 5
+
+  # AWS X-Ray exporter (for AWS environments)
+  awsxray:
+    region: "us-east-1"
+    role_arn: "arn:aws:iam::123456789012:role/xray-exporter"
+    dimension_rollup_option: NoDimensionRollup
+    parse_log_attributes: false
+    local_mode: false
+    resource_arn_ttl: "1h"
+    indexed_attributes: ["aws.requestId", "aws.lambda.function_name", "aws.lambda.function_version"]
+
+  # Azure Application Insights exporter
+  azuremonitor:
+    connection_string: "InstrumentationKey=your-instrumentation-key"
+    resource_uri: "https://your-resource-id"
+
+  # New Relic exporter
+  newrelic:
+    api_key: "your-newrelic-api-key"
+    span:
+      service_name: "saler-backend"
+    license_key: "your-newrelic-license-key"
+
+# Extensions provide capabilities that can be added to the Collector.
+# They are intended to be used to extend the Collector functionality.
+extensions:
+  # ZPages extension for HTTP endpoint
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+  # Health check extension
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  # PProf extension for profiling
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+  # SigV4 auth extension for AWS services
+  sigv4auth:
+    service: "xray"
+    region: "us-east-1"
+    assume_role:
+      sts_server_end_point: "sts.us-east-1.amazonaws.com"
+      role_arn: "arn:aws:iam::123456789012:role/xray-exporter"
+      role_session_name: "otel-collector"
+
+  # HTTP forwarder extension
+  httpforwarder:
+    endpoint: "http://proxy:8080"
+
+# Service pipeline configuration
+service:
+  # Extensions to include in the service
+  extensions: [health_check, zpages]
+  
+  # Pipelines define how data flows through the collector
+  pipelines:
+    # Traces pipeline
+    traces:
+      receivers: [otlp, jaeger, zipkin, zipkin_http]
+      processors: [memory_limiter, resource, batch, resourcedetection]
+      exporters: [jaeger, otlp, prometheus, logging, file]
+    
+    # Metrics pipeline
+    metrics:
+      receivers: [prometheus, hostmetrics, dockerstats]
+      processors: [memory_limiter, resource, batch, resourcedetection]
+      exporters: [prometheus, logging, file]
+    
+    # Logs pipeline (if enabled)
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [logging, file]
+
+  # Telemetry settings
+  telemetry:
+    metrics:
+      address: 0.0.0.0:8888
+      level: detailed
+    logs:
+      level: info
+
+# Global settings
+extensions: [health_check, zpages]
+
+# Service discovery
+extensions:
+  service_discovery:
+    type: "static"
+    config:
+      - endpoint: "saler-backend:8000"
+        labels: ["backend"]
+
+# Advanced configuration for high-throughput environments
+advanced:
+  # Queue settings
+  queue_settings:
+    enabled: true
+    storage_type: "file"
+    storage_path: "/var/lib/otel-collector/queue"
+    storage_max_size_gb: 1
+
+  # Processor settings for high load
+  high_throughput:
+    batch:
+      timeout: 500ms
+      send_batch_size: 2048
+      send_batch_max_size: 4096
+    memory_limiter:
+      limit_mib: 1024
+      spike_limit_mib: 256
+
+  # Logging configuration
+  logging:
+    level: info
+    sampling:
+      initial: 100
+      thereafter: 1000
+      trace:
+        enabled: false

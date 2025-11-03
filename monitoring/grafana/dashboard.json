@@ -1,0 +1,187 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "نظرة عامة على النظام - System Overview Dashboard",
+    "tags": ["system", "overview", "dashboard"],
+    "timezone": "UTC",
+    "refresh": "5s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "استخدام المعالج - CPU Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+            "legendFormat": "استخدام المعالج (%)",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "yAxes": [
+          {"min": 0, "max": 100, "unit": "percent"}
+        ],
+        "alert": {
+          "conditions": [
+            {"query": {"queryType": "", "refId": "A"}, "reducer": {"params": [], "type": "avg"},
+             "evaluator": {"params": [80], "type": "gt"}}
+          ],
+          "executionErrorState": "alerting",
+          "for": "5m",
+          "frequency": "10s",
+          "handler": 1,
+          "name": "استخدام المعالج عالي",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 2,
+        "title": "استخدام الذاكرة - Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "100 * (1 - (avg_over_time(node_memory_MemAvailable_bytes[5m]) / avg_over_time(node_memory_MemTotal_bytes[5m])))",
+            "legendFormat": "استخدام الذاكرة (%)",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "yAxes": [
+          {"min": 0, "max": 100, "unit": "percent"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "حركة الشبكة - Network Traffic",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(node_network_receive_bytes_total[5m])",
+            "legendFormat": "استقبال - {{instance}}",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(node_network_transmit_bytes_total[5m])",
+            "legendFormat": "إرسال - {{instance}}",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "yAxes": [
+          {"unit": "Bps"}
+        ]
+      },
+      {
+        "id": 4,
+        "title": "مساحة القرص - Disk Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "100 * (1 - (avg_over_time(node_filesystem_avail_bytes[5m]) / avg_over_time(node_filesystem_size_bytes[5m])))",
+            "legendFormat": "استخدام القرص - {{instance}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "yAxes": [
+          {"min": 0, "max": 100, "unit": "percent"}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "أداء التطبيق - Application Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "avg(http_request_duration_seconds)",
+            "legendFormat": "متوسط وقت الاستجابة (ثانية)",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P95 وقت الاستجابة",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P99 وقت الاستجابة",
+            "refId": "C"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+        "yAxes": [
+          {"unit": "s"}
+        ]
+      },
+      {
+        "id": 6,
+        "title": "طلبات API - API Requests",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[5m])) by (status_code)",
+            "legendFormat": "{{status_code}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "yAxes": [
+          {"unit": "reqps"}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "المستخدمون النشطون - Active Users",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(active_users_total)",
+            "legendFormat": "المستخدمون النشطون",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 24},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 100},
+                {"color": "red", "value": 500}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "معدل الأخطاء - Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{status_code=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+            "legendFormat": "معدل الأخطاء (%)",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 24},
+        "yAxes": [
+          {"min": 0, "max": 100, "unit": "percent"}
+        ]
+      }
+    ],
+    "time": {"from": "now-1h", "to": "now"},
+    "templating": {
+      "list": [
+        {
+          "name": "datasource",
+          "type": "datasource",
+          "query": "prometheus",
+          "current": {"value": "Prometheus", "text": "Prometheus"}
+        }
+      ]
+    }
+  }
+}

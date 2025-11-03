@@ -1,0 +1,64 @@
+# 🎯 Saler Commit Message Template
+# ================================
+# 
+# Please use the following format for commit messages:
+# 
+# <type>[optional scope]: <description>
+# 
+# [optional body]
+# 
+# [optional footer(s)]
+# 
+# 
+# Types:
+# ======
+# feat:     A new feature
+# fix:      A bug fix
+# docs:     Documentation only changes
+# style:    Changes that do not affect the meaning of the code
+# refactor: A code change that neither fixes a bug nor adds a feature
+# perf:     A code change that improves performance
+# test:     Adding missing tests or correcting existing tests
+# build:    Changes that affect the build system or external dependencies
+# ci:       Changes to our CI configuration files and scripts
+# chore:    Other changes that don't modify src or test files
+# revert:   Reverts a previous commit
+# 
+# 
+# Examples:
+# =========
+# 
+# feat(ai-scoring): add machine learning model integration
+# 
+# - Implement TensorFlow model for lead scoring
+# - Add real-time scoring endpoint
+# - Include confidence intervals in response
+# - Add comprehensive error handling
+# 
+# Closes #123
+# 
+# 
+# fix(database): resolve connection pool timeout issue
+# 
+# - Increase connection pool size
+# - Add connection retry logic
+# - Improve error messaging
+# 
+# Related to #456
+# 
+# 
+# docs(api): update scoring endpoint documentation
+# 
+# - Add request/response examples
+# - Include error code descriptions
+# - Add rate limiting information
+# 
+# 
+# Tips:
+# =====
+# • Keep the subject line concise (50 chars or less)
+# • Use the body to explain what and why vs. how
+# • Break long lines into multiple lines
+# • Use imperative mood ("add feature" not "added feature")
+# • Reference issues and pull requests liberally
+# • Include Co-authored-by for pair programming sessions

@@ -1,0 +1,475 @@
+# قواعد التنبيه - Alert Rules
+# Alert Rules Configuration
+
+# إعدادات عامة
+global:
+  # الفترة الزمنية للتقييم
+  evaluation_interval: 30s
+  
+  # قواعد التصعيد
+  external_labels:
+    environment: 'production'
+    cluster: 'saler-monitoring'
+
+# قواعد التنبيه الأساسية
+groups:
+  - name: system_alerts
+    rules:
+      # تنبيهات استخدام المعالج
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: system
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is above 85% on {{ $labels.instance }} for more than 5 minutes."
+          runbook_url: "https://wiki.company.com/runbooks/high-cpu"
+          action: "Check running processes and consider scaling"
+
+      # تنبيهات استخدام الذاكرة
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: system
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is above 85% on {{ $labels.instance }}"
+          runbook_url: "https://wiki.company.com/runbooks/high-memory"
+          action: "Identify memory-consuming processes"
+
+      # تنبيهات مساحة القرص
+      - alert: DiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: system
+        annotations:
+          summary: "Disk space is running low"
+          description: "Disk usage is above 85% on {{ $labels.instance }}:{{ $labels.mountpoint }}"
+          runbook_url: "https://wiki.company.com/runbooks/disk-space"
+          action: "Clean up old logs and temporary files"
+
+      # تنبيهات الشبكة
+      - alert: NetworkInterfaceDown
+        expr: node_network_up{device!="lo"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: network
+        annotations:
+          summary: "Network interface is down"
+          description: "Network interface {{ $labels.device }} is down on {{ $labels.instance }}"
+          runbook_url: "https://wiki.company.com/runbooks/network-down"
+          action: "Check network connectivity and interface status"
+
+      # تنبيهات الخدمات
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: service
+        annotations:
+          summary: "Service is down"
+          description: "Service {{ $labels.job }} on {{ $labels.instance }} is down"
+          runbook_url: "https://wiki.company.com/runbooks/service-down"
+          action: "Check service status and restart if necessary"
+
+  - name: application_alerts
+    rules:
+      # تنبيهات معدل الأخطاء
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) * 100 > 5
+        for: 2m
+        labels:
+          severity: warning
+          category: application
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is above 5% for service {{ $labels.service }} on {{ $labels.instance }}"
+          runbook_url: "https://wiki.company.com/runbooks/high-error-rate"
+          action: "Check application logs and recent deployments"
+
+      # تنبيهات زمن الاستجابة
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is above 1 second for {{ $labels.service }}"
+          runbook_url: "https://wiki.company.com/runbooks/high-response-time"
+          action: "Investigate slow queries and optimize database"
+
+      # تنبيهات قاعدة البيانات
+      - alert: DatabaseConnectionHigh
+        expr: postgresql_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: database
+        annotations:
+          summary: "Database connection failed"
+          description: "Cannot connect to PostgreSQL database {{ $labels.job }}"
+          runbook_url: "https://wiki.company.com/runbooks/database-down"
+          action: "Check database service and connection strings"
+
+      - alert: DatabaseReplicationLag
+        expr: postgresql_replication_lag_seconds > 30
+        for: 2m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "Database replication lag detected"
+          description: "Replication lag is {{ $value }}s for {{ $labels.instance }}"
+          runbook_url: "https://wiki.company.com/runbooks/replication-lag"
+          action: "Check replication status and network connectivity"
+
+      # تنبيهات Cache
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: cache
+        annotations:
+          summary: "Redis cache is down"
+          description: "Redis instance {{ $labels.instance }} is unreachable"
+          runbook_url: "https://wiki.company.com/runbooks/redis-down"
+          action: "Check Redis service and restart if necessary"
+
+      - alert: CacheHitRateLow
+        expr: rate(redis_keyspace_hits_total[5m]) / (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m])) * 100 < 80
+        for: 5m
+        labels:
+          severity: warning
+          category: cache
+        annotations:
+          summary: "Cache hit rate is low"
+          description: "Cache hit rate is {{ $value }}% for {{ $labels.instance }}"
+          runbook_url: "https://wiki.company.com/runbooks/low-cache-hit-rate"
+          action: "Check cache configuration and memory allocation"
+
+  - name: security_alerts
+    rules:
+      # تنبيهات محاولات التسلل
+      - alert: IntrusionAttemptDetected
+        expr: increase(security_intrusion_attempts_total[5m]) > 10
+        for: 1m
+        labels:
+          severity: critical
+          category: security
+        annotations:
+          summary: "Multiple intrusion attempts detected"
+          description: "{{ $value }} intrusion attempts detected from {{ $labels.source_ip }}"
+          runbook_url: "https://wiki.company.com/runbooks/intrusion-attempt"
+          action: "Block source IP and investigate security breach"
+
+      # تنبيهات فحوصات الأمان
+      - alert: SecurityScanDetected
+        expr: increase(security_port_scan_total[5m]) > 50
+        for: 1m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "Port scanning activity detected"
+          description: "{{ $value }} port scan attempts detected from {{ $labels.source_ip }}"
+          runbook_url: "https://wiki.company.com/runbooks/port-scan"
+          action: "Monitor network traffic and block suspicious IPs"
+
+      # تنبيهات فشل تسجيل الدخول
+      - alert: MultipleFailedLogins
+        expr: increase(security_failed_logins_total[5m]) > 20
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "Multiple failed login attempts"
+          description: "{{ $value }} failed login attempts from {{ $labels.source_ip }}"
+          runbook_url: "https://wiki.company.com/runbooks/failed-logins"
+          action: "Check for brute force attacks and consider IP blocking"
+
+      # تنبيهات تعديل الملفات الحساسة
+      - alert: SensitiveFileModified
+        expr: increase(security_sensitive_file_modifications_total[5m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          category: security
+        annotations:
+          summary: "Sensitive file was modified"
+          description: "Sensitive file {{ $labels.file_path }} was modified by {{ $labels.user }}"
+          runbook_url: "https://wiki.company.com/runbooks/file-modification"
+          action: "Investigate file changes and verify integrity"
+
+  - name: business_alerts
+    rules:
+      # تنبيهات معدل التحويل
+      - alert: ConversionRateDrop
+        expr: (rate(conversion_events_total[1h]) / rate(visitor_sessions_total[1h])) * 100 < 2
+        for: 15m
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "Conversion rate dropped significantly"
+          description: "Conversion rate is {{ $value }}% for {{ $labels.funnel_stage }}"
+          runbook_url: "https://wiki.company.com/runbooks/conversion-drop"
+          action: "Analyze conversion funnel and check for issues"
+
+      # تنبيهات الإيرادات
+      - alert: RevenueThresholdBreach
+        expr: rate(revenue_total[1h]) < 1000
+        for: 30m
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "Revenue below threshold"
+          description: "Hourly revenue is ${{ $value }} which is below expected threshold"
+          runbook_url: "https://wiki.company.com/runbooks/revenue-alert"
+          action: "Check payment processing and business metrics"
+
+      # تنبيهات تجربة المستخدم
+      - alert: UserAbandonmentRateHigh
+        expr: (rate(user_abandoned_sessions_total[1h]) / rate(user_sessions_total[1h])) * 100 > 60
+        for: 10m
+        labels:
+          severity: warning
+          category: user_experience
+        annotations:
+          summary: "High user abandonment rate"
+          description: "User abandonment rate is {{ $value }}% for {{ $labels.journey_stage }}"
+          runbook_url: "https://wiki.company.com/runbooks/user-abandonment"
+          action: "Review user experience and identify pain points"
+
+  - name: infrastructure_alerts
+    rules:
+      # تنبيهات Kubernetes
+      - alert: PodCrashLooping
+        expr: rate(kube_pod_container_status_restarts_total[15m]) * 60 * 15 > 3
+        for: 5m
+        labels:
+          severity: warning
+          category: kubernetes
+        annotations:
+          summary: "Pod is crash looping"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is crash looping"
+          runbook_url: "https://wiki.company.com/runbooks/pod-crash-loop"
+          action: "Check pod logs and resource allocation"
+
+      - alert: NodeNotReady
+        expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          category: kubernetes
+        annotations:
+          summary: "Kubernetes node is not ready"
+          description: "Node {{ $labels.node }} has been not ready for 5 minutes"
+          runbook_url: "https://wiki.company.com/runbooks/node-not-ready"
+          action: "Check node health and restart if necessary"
+
+      # تنبيهات Docker
+      - alert: DockerContainerDown
+        expr: docker_container_up == 0
+        for: 2m
+        labels:
+          severity: warning
+          category: docker
+        annotations:
+          summary: "Docker container is down"
+          description: "Container {{ $labels.container }} on {{ $labels.host }} is down"
+          runbook_url: "https://wiki.company.com/runbooks/container-down"
+          action: "Check container status and restart if necessary"
+
+  - name: performance_alerts
+    rules:
+      # تنبيهات زمن الاستجابة
+      - alert: DatabaseQuerySlow
+        expr: histogram_quantile(0.95, rate(database_query_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          category: database_performance
+        annotations:
+          summary: "Slow database queries detected"
+          description: "95th percentile query duration is {{ $value }}s for {{ $labels.instance }}"
+          runbook_url: "https://wiki.company.com/runbooks/slow-queries"
+          action: "Analyze slow queries and optimize database indexes"
+
+      # تنبيهات استخدام CPU للعملاء
+      - alert: ApplicationCPUHigh
+        expr: rate(process_cpu_seconds_total[5m]) * 100 > 80
+        for: 3m
+        labels:
+          severity: warning
+          category: application_performance
+        annotations:
+          summary: "Application CPU usage is high"
+          description: "Application {{ $labels.job }} is using {{ $value }}% CPU"
+          runbook_url: "https://wiki.company.com/runbooks/app-cpu-high"
+          action: "Profile application and optimize resource usage"
+
+      # تنبيهات استخدام الذاكرة للتطبيق
+      - alert: ApplicationMemoryHigh
+        expr: process_resident_memory_bytes > 1073741824  # 1GB
+        for: 5m
+        labels:
+          severity: warning
+          category: application_performance
+        annotations:
+          summary: "Application memory usage is high"
+          description: "Application {{ $labels.job }} is using {{ $value | humanizeBytes }} of memory"
+          runbook_url: "https://wiki.company.com/runbooks/app-memory-high"
+          action: "Check for memory leaks and optimize memory usage"
+
+  - name: availability_alerts
+    rules:
+      # تنبيهات الإتاحة
+      - alert: ServiceAvailabilityLow
+        expr: (avg(up{job!="prometheus"}) by (job) * 100) < 99
+        for: 5m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Service availability is below 99%"
+          description: "Service {{ $labels.job }} availability is {{ $value }}% for 5 minutes"
+          runbook_url: "https://wiki.company.com/runbooks/service-availability"
+          action: "Check service health and deployment status"
+
+      # تنبيهات انتهاء الشهادات
+      - alert: SSLCertificateExpiring
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 30
+        for: 1h
+        labels:
+          severity: warning
+          category: ssl
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "SSL certificate for {{ $labels.instance }} expires in {{ $value }} days"
+          runbook_url: "https://wiki.company.com/runbooks/ssl-expiry"
+          action: "Renew SSL certificate before expiration"
+
+  - name: log_alerts
+    rules:
+      # تنبيهات السجلات
+      - alert: HighLogErrorRate
+        expr: rate(log_entries_total{level="error"}[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          category: logging
+        annotations:
+          summary: "High error log rate detected"
+          description: "Error log rate is {{ $value }} entries/second for {{ $labels.service }}"
+          runbook_url: "https://wiki.company.com/runbooks/error-logs"
+          action: "Check application logs and fix errors"
+
+      # تنبيهات تنسيق السجلات
+      - alert: LogFormatError
+        expr: increase(log_entries_total{level="error",error_type="format"}[5m]) > 5
+        for: 1m
+        labels:
+          severity: warning
+          category: logging
+        annotations:
+          summary: "Log format errors detected"
+          description: "{{ $value }} log format errors detected for {{ $labels.service }}"
+          runbook_url: "https://wiki.company.com/runbooks/log-format"
+          action: "Fix log formatting issues"
+
+# قواعد التنبيه المتقدمة
+advanced_rules:
+  - name: dynamic_alerts
+    rules:
+      # تنبيه ديناميكي بناءً على النشاط
+      - alert: AnomalousTrafficDetected
+        expr: |
+          (
+            rate(http_requests_total[5m]) > 
+            (avg_over_time(rate(http_requests_total[5m])[1h:5m]) * 3)
+          )
+          and 
+          rate(http_requests_total[5m]) > 100
+        for: 3m
+        labels:
+          severity: warning
+          category: anomaly
+        annotations:
+          summary: "Anomalous traffic pattern detected"
+          description: "Traffic is {{ $value | humanize }} requests/sec which is 3x normal rate"
+          runbook_url: "https://wiki.company.com/runbooks/anomalous-traffic"
+          action: "Investigate traffic source and check for DDoS attacks"
+
+  - name: prediction_alerts
+    rules:
+      # تنبيهات تنبؤية
+      - alert: DiskSpacePrediction
+        expr: |
+          (
+            (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100
+          ) < 
+          (
+            100 - ((node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100) / 24 * 7
+          )
+        for: 1h
+        labels:
+          severity: warning
+          category: prediction
+        annotations:
+          summary: "Disk will be full within 7 days"
+          description: "Disk {{ $labels.mountpoint }} will reach 100% capacity in approximately 7 days at current usage rate"
+          runbook_url: "https://wiki.company.com/runbooks/disk-prediction"
+          action: "Plan disk cleanup or expansion immediately"
+
+# قواعد التنبيه المخصصة
+custom_rules:
+  - name: business_logic_alerts
+    rules:
+      - alert: PaymentProcessingFailure
+        expr: increase(payment_processing_errors_total[5m]) > 5
+        for: 1m
+        labels:
+          severity: critical
+          category: payment
+        annotations:
+          summary: "Payment processing failures detected"
+          description: "{{ $value }} payment processing failures in the last 5 minutes"
+          runbook_url: "https://wiki.company.com/runbooks/payment-failure"
+          action: "Check payment gateway status and transaction logs"
+
+      - alert: InventoryLow
+        expr: inventory_stock_level < 10
+        for: 0s
+        labels:
+          severity: info
+          category: inventory
+        annotations:
+          summary: "Inventory running low"
+          description: "Product {{ $labels.product_id }} has only {{ $value }} units remaining"
+          runbook_url: "https://wiki.company.com/runbooks/inventory-low"
+          action: "Review inventory levels and reorder if necessary"
+
+      - alert: UserRegistrationRateLow
+        expr: rate(user_registrations_total[1h]) < 10
+        for: 30m
+        labels:
+          severity: warning
+          category: growth
+        annotations:
+          summary: "User registration rate is low"
+          description: "User registration rate is {{ $value }}/hour which is below normal"
+          runbook_url: "https://wiki.company.com/runbooks/registration-rate"
+          action: "Check signup process and marketing campaigns"

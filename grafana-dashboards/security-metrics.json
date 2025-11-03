@@ -1,0 +1,870 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "مقاييس الأمان - Security Metrics",
+    "tags": ["saler", "monitoring", "security", "safety"],
+    "timezone": "Asia/Riyadh",
+    "refresh": "1m",
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "محاولات الدخول المشبوهة - Suspicious Login Attempts",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(increase(failed_login_attempts_total[1h]))",
+            "legendFormat": "Failed Logins (1h)",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(increase(successful_logins_total[1h]))",
+            "legendFormat": "Successful Logins (1h)",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(rate(suspicious_ip_attempts_total[5m]))",
+            "legendFormat": "Suspicious IPs (5m)",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "custom": {
+              "displayMode": "color-background"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 10},
+                {"color": "red", "value": 50}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "text": {},
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 2,
+        "title": "معدل محاولات الاختراق - Attack Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(rate(ddos_attempts_total[5m]))",
+            "legendFormat": "DDoS Attempts/sec",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(sql_injection_attempts_total[5m]))",
+            "legendFormat": "SQL Injection Attempts/sec",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(rate(xss_attempts_total[5m]))",
+            "legendFormat": "XSS Attempts/sec",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "custom": {
+              "displayMode": "color-background"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 1},
+                {"color": "red", "value": 10}
+              ]
+            },
+            "unit": "ops"
+          }
+        },
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "text": {},
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 3,
+        "title": "شهادات SSL/TLS - SSL/TLS Certificates",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "ssl_certificate_valid_days_remaining",
+            "legendFormat": "Days Until Expiry",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "custom": {
+              "displayMode": "color-background"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 7},
+                {"color": "green", "value": 30}
+              ]
+            },
+            "unit": "d"
+          }
+        },
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "text": {},
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 4,
+        "title": "محاولات الوصول حسب العنوان - Access Attempts by IP",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "topk(10, sum(rate(access_attempts_total[24h])) by (source_ip))",
+            "legendFormat": "{{source_ip}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "auto",
+              "displayMode": "color-background-solid"
+            },
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 100},
+                {"color": "red", "value": 1000}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "desc": true,
+              "displayName": "Value"
+            }
+          ]
+        }
+      },
+      {
+        "id": 5,
+        "title": "محاولات الاختراق حسب النوع - Attack Types Over Time",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "sum(rate(suspicious_requests_total{attack_type=\"ddos\"}[5m]))",
+            "legendFormat": "DDoS",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(suspicious_requests_total{attack_type=\"sql_injection\"}[5m]))",
+            "legendFormat": "SQL Injection",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(rate(suspicious_requests_total{attack_type=\"xss\"}[5m]))",
+            "legendFormat": "XSS",
+            "refId": "C"
+          },
+          {
+            "expr": "sum(rate(suspicious_requests_total{attack_type=\"csrf\"}[5m]))",
+            "legendFormat": "CSRF",
+            "refId": "D"
+          },
+          {
+            "expr": "sum(rate(suspicious_requests_total{attack_type=\"path_traversal\"}[5m]))",
+            "legendFormat": "Path Traversal",
+            "refId": "E"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisPlacement": "auto",
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 20,
+              "gradientMode": "opacity",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "lineInterpolation": "linear",
+              "lineWidth": 2,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "line"
+              }
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1},
+                {"color": "red", "value": 10}
+              ]
+            },
+            "unit": "ops"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "options": {
+          "legend": {
+            "calcs": ["mean", "max"],
+            "displayMode": "table",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "none"
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "حالة جدار الحماية - Firewall Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up{job=\"firewall\"}",
+            "legendFormat": "Firewall Status",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(firewall_blocked_requests_total[5m]))",
+            "legendFormat": "Blocked Requests/sec",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(rate(firewall_allowed_requests_total[5m]))",
+            "legendFormat": "Allowed Requests/sec",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "custom": {
+              "displayMode": "color-background"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            },
+            "unit": "short",
+            "mappings": [
+              {"options": {"0": {"text": "DOWN", "color": "red"}}, "type": "value"},
+              {"options": {"1": {"text": "UP", "color": "green"}}, "type": "value"}
+            ]
+          }
+        },
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 16},
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "text": {},
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 7,
+        "title": "التحقق من الهوية - Authentication Events",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "sum(rate(authentication_attempts_total{result=\"success\"}[5m]))",
+            "legendFormat": "Successful Logins",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(authentication_attempts_total{result=\"failed\"}[5m]))",
+            "legendFormat": "Failed Logins",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(rate(authentication_attempts_total{result=\"blocked\"}[5m]))",
+            "legendFormat": "Blocked Attempts",
+            "refId": "C"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisPlacement": "auto",
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 10,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "lineInterpolation": "linear",
+              "lineWidth": 2,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "red", "value": 80}
+              ]
+            },
+            "unit": "ops"
+          }
+        },
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 16},
+        "options": {
+          "legend": {
+            "calcs": ["mean", "max"],
+            "displayMode": "table",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "none"
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "مستوى الأمان العام - Overall Security Level",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "security_score",
+            "legendFormat": "Security Score",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "custom": {
+              "displayMode": "color-background"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 50},
+                {"color": "green", "value": 80}
+              ]
+            },
+            "unit": "short",
+            "min": 0,
+            "max": 100
+          }
+        },
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 16},
+        "options": {
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "showThresholdLabels": true,
+          "showThresholdMarkers": true,
+          "text": {}
+        }
+      },
+      {
+        "id": 9,
+        "title": "تحديثات الأمان - Security Updates Status",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "security_updates_available",
+            "legendFormat": "{{component}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "auto",
+              "displayMode": "color-background-solid"
+            },
+            "mappings": [
+              {"options": {"0": {"text": "None", "color": "green"}}, "type": "value"},
+              {"options": {"1": {"text": "Available", "color": "yellow"}}, "type": "value"},
+              {"options": {"2": {"text": "Critical", "color": "red"}}, "type": "value"}
+            ],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1},
+                {"color": "red", "value": 2}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "desc": false,
+              "displayName": "Component"
+            }
+          ]
+        }
+      },
+      {
+        "id": 10,
+        "title": "فحص الثغرات الأمنية - Vulnerability Scanning",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "vulnerabilities_critical_total",
+            "legendFormat": "Critical Vulnerabilities",
+            "refId": "A"
+          },
+          {
+            "expr": "vulnerabilities_high_total",
+            "legendFormat": "High Severity",
+            "refId": "B"
+          },
+          {
+            "expr": "vulnerabilities_medium_total",
+            "legendFormat": "Medium Severity",
+            "refId": "C"
+          },
+          {
+            "expr": "vulnerabilities_low_total",
+            "legendFormat": "Low Severity",
+            "refId": "D"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "custom": {
+              "displayMode": "color-background"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 5},
+                {"color": "red", "value": 10}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "options": {
+          "colorMode": "background",
+          "graphMode": "area",
+          "justifyMode": "center",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          },
+          "text": {},
+          "textMode": "value_and_name"
+        }
+      },
+      {
+        "id": 11,
+        "title": "الملفات المشبوهة - Suspicious Files Detected",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "topk(10, sum(rate(malware_detection_total[24h])) by (file_type, threat_level))",
+            "legendFormat": "{{file_type}} - {{threat_level}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "auto",
+              "displayMode": "color-background-solid"
+            },
+            "mappings": [
+              {"options": {"low": {"text": "Low", "color": "green"}}, "type": "value"},
+              {"options": {"medium": {"text": "Medium", "color": "yellow"}}, "type": "value"},
+              {"options": {"high": {"text": "High", "color": "orange"}}, "type": "value"},
+              {"options": {"critical": {"text": "Critical", "color": "red"}}, "type": "value"}
+            ],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1},
+                {"color": "orange", "value": 5},
+                {"color": "red", "value": 10}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+        "options": {
+          "showHeader": true,
+          "sortBy": [
+            {
+              "desc": true,
+              "displayName": "Value"
+            }
+          ]
+        }
+      },
+      {
+        "id": 12,
+        "title": "تقارير الأمان - Security Reports Timeline",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "sum(rate(security_incidents_total[24h])) by (severity)",
+            "legendFormat": "{{severity}} Incidents",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(security_scans_total[24h]))",
+            "legendFormat": "Security Scans",
+            "refId": "B"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisPlacement": "auto",
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 10,
+              "gradientMode": "none",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "lineInterpolation": "linear",
+              "lineWidth": 2,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "off"
+              }
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "red", "value": 80}
+              ]
+            },
+            "unit": "short"
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+        "options": {
+          "legend": {
+            "calcs": ["mean", "max"],
+            "displayMode": "table",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "none"
+          }
+        }
+      },
+      {
+        "id": 13,
+        "title": "التسريبات المشبوهة - Data Exfiltration Attempts",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "sum(rate(data_exfiltration_attempts_total[5m])) by (data_type)",
+            "legendFormat": "{{data_type}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            },
+            "custom": {
+              "axisPlacement": "auto",
+              "barAlignment": 0,
+              "drawStyle": "line",
+              "fillOpacity": 20,
+              "gradientMode": "opacity",
+              "hideFrom": {
+                "legend": false,
+                "tooltip": false,
+                "vis": false
+              },
+              "lineInterpolation": "linear",
+              "lineWidth": 2,
+              "pointSize": 5,
+              "scaleDistribution": {
+                "type": "linear"
+              },
+              "showPoints": "never",
+              "spanNulls": false,
+              "stacking": {
+                "group": "A",
+                "mode": "none"
+              },
+              "thresholdsStyle": {
+                "mode": "line"
+              }
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 0.1},
+                {"color": "red", "value": 1}
+              ]
+            },
+            "unit": "ops"
+          }
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 40},
+        "options": {
+          "legend": {
+            "calcs": ["mean", "max"],
+            "displayMode": "table",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "none"
+          }
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "current": {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "definition": "label_values(suspicious_requests_total, source_ip)",
+          "description": "Source IP filter",
+          "error": null,
+          "hide": 0,
+          "includeAll": true,
+          "label": "Source IP",
+          "multi": true,
+          "name": "source_ip",
+          "options": [],
+          "query": "label_values(suspicious_requests_total, source_ip)",
+          "refresh": 1,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 0,
+          "type": "query"
+        },
+        {
+          "current": {
+            "selected": false,
+            "text": "All",
+            "value": "$__all"
+          },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "definition": "label_values(suspicious_requests_total, attack_type)",
+          "description": "Attack type filter",
+          "error": null,
+          "hide": 0,
+          "includeAll": true,
+          "label": "Attack Type",
+          "multi": true,
+          "name": "attack_type",
+          "options": [],
+          "query": "label_values(suspicious_requests_total, attack_type)",
+          "refresh": 1,
+          "regex": "",
+          "skipUrlSync": false,
+          "sort": 0,
+          "type": "query"
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": {
+            "type": "datasource",
+            "uid": "grafana"
+          },
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "enable": true,
+          "expr": "increase(security_incidents_total[1m]) > 0",
+          "iconColor": "red",
+          "name": "Security Incidents",
+          "target": {
+            "limit": 100,
+            "matchAny": false,
+            "tags": [],
+            "type": "dashboard"
+          },
+          "textFormat": "{{incident_type}} - {{severity}}",
+          "titleFormat": "Security Incident"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "enable": true,
+          "expr": "increase(certificate_expiry_alerts_total[1h]) > 0",
+          "iconColor": "yellow",
+          "name": "Certificate Alerts",
+          "target": {
+            "limit": 100,
+            "matchAny": false,
+            "tags": [],
+            "type": "dashboard"
+          },
+          "textFormat": "{{domain}} - {{days_remaining}} days",
+          "titleFormat": "SSL Certificate Expiry"
+        }
+      ]
+    }
+  }
+}

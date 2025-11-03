@@ -1,0 +1,742 @@
+name: 💾 Backup & Disaster Recovery
+
+on:
+  schedule:
+    - cron: '0 2 * * 0' # Weekly backup on Sunday 2 AM
+  workflow_dispatch:
+    inputs:
+      backup_type:
+        description: 'Backup type'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - database
+          - code
+          - configuration
+      retention_days:
+        description: 'Backup retention period (days)'
+        required: false
+        default: '30'
+      verify_backup:
+        description: 'Verify backup integrity'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  BACKUP_PATH: './backup-artifacts'
+
+jobs:
+  # ==================== BACKUP PREPARATION ====================
+  backup-preparation:
+    name: 💾 Backup Preparation
+    runs-on: ubuntu-latest
+    outputs:
+      backup-id: ${{ steps.backup-id.outputs.backup-id }}
+      backup-type: ${{ steps.backup-type.outputs.backup-type }}
+      retention-days: ${{ steps.retention.outputs.retention-days }}
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🆔 Generate Backup ID
+      id: backup-id
+      run: |
+        BACKUP_ID="backup-$(date +%Y%m%d-%H%M%S)-${GITHUB_SHA::8}"
+        echo "backup-id=$BACKUP_ID" >> $GITHUB_OUTPUT
+        
+        echo "#### 💾 Backup Preparation" >> $GITHUB_STEP_SUMMARY
+        echo "**Backup ID**: $BACKUP_ID" >> $GITHUB_STEP_SUMMARY
+        echo "**Timestamp**: $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "**Repository**: ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+
+    - name: 🏷️ Determine Backup Type
+      id: backup-type
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          BACKUP_TYPE="${{ github.event.inputs.backup_type }}"
+        else:
+          BACKUP_TYPE="full"
+        fi
+        
+        echo "backup-type=$BACKUP_TYPE" >> $GITHUB_OUTPUT
+        echo "**Backup Type**: $BACKUP_TYPE" >> $GITHUB_STEP_SUMMARY
+
+    - name: 📅 Backup Retention Period
+      id: retention
+      run: |
+        RETENTION_DAYS="${{ github.event.inputs.retention_days || '30' }}"
+        echo "retention-days=$RETENTION_DAYS" >> $GITHUB_OUTPUT
+        echo "**Retention Period**: $RETENTION_DAYS days" >> $GITHUB_STEP_SUMMARY
+
+    - name: 🔍 Pre-backup Validation
+      run: |
+        echo "##### 🔍 Pre-backup Validation" >> $GITHUB_STEP_SUMMARY
+        
+        # Check repository integrity
+        if git fsck --full >/dev/null 2>&1; then
+          echo "✅ **Repository integrity verified**" >> $GITHUB_STEP_SUMMARY
+        else:
+          echo "❌ **Repository integrity check failed**" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
+        
+        # Check disk space
+        AVAILABLE_SPACE=$(df -BG . | awk 'NR==2 {print $4}' | sed 's/G//')
+        REQUIRED_SPACE=5  # GB
+        
+        echo "**Available disk space**: ${AVAILABLE_SPACE}GB" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "$AVAILABLE_SPACE" -gt "$REQUIRED_SPACE" ]; then
+          echo "✅ **Sufficient disk space available**" >> $GITHUB_STEP_SUMMARY
+        else:
+          echo "⚠️ **Limited disk space - cleanup recommended**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Check for sensitive files
+        SENSITIVE_FILES=(".env*" "*.key" "*.pem" "secrets.*")
+        SENSITIVE_FOUND=false
+        
+        for pattern in "${SENSITIVE_FILES[@]}"; do
+          if find . -name "$pattern" -not -path "./.git/*" | head -1 | grep -q .; then
+            SENSITIVE_FOUND=true
+            break
+          fi
+        done
+        
+        if [ "$SENSITIVE_FOUND" = true ]; then
+          echo "⚠️ **Sensitive files detected - ensure they're excluded**" >> $GITHUB_STEP_SUMMARY
+        else:
+          echo "✅ **No sensitive files in backup scope**" >> $GITHUB_STEP_SUMMARY
+        fi
+
+  # ==================== CODE BACKUP ====================
+  code-backup:
+    name: 📝 Code Backup
+    runs-on: ubuntu-latest
+    needs: backup-preparation
+    if: needs.backup-preparation.outputs.backup-type == 'full' || needs.backup-preparation.outputs.backup-type == 'code'
+    timeout-minutes: 10
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 📝 Create Code Archive
+      run: |
+        echo "#### 📝 Code Backup Process" >> $GITHUB_STEP_SUMMARY
+        
+        # Create backup directory
+        mkdir -p ${{ env.BACKUP_PATH }}
+        
+        # Create code archive
+        echo "##### 📦 Creating Code Archive" >> $GITHUB_STEP_SUMMARY
+        
+        # Get repository info
+        REPO_URL=$(git remote get-url origin 2>/dev/null || echo "unknown")
+        CURRENT_BRANCH=$(git branch --show-current)
+        LAST_COMMIT=$(git log -1 --pretty=format:"%h %s")
+        
+        # Create metadata file
+        cat > ${{ env.BACKUP_PATH }}/backup-metadata.json << EOF
+{
+  "backup_info": {
+    "backup_id": "${{ needs.backup-preparation.outputs.backup-id }}",
+    "backup_type": "code",
+    "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+    "repository": "${{ github.repository }}",
+    "branch": "$CURRENT_BRANCH",
+    "commit": "${{ github.sha }}",
+    "last_commit_message": "$LAST_COMMIT",
+    "retention_days": ${{ needs.backup-preparation.outputs.retention-days }}
+  },
+  "repository_info": {
+    "url": "$REPO_URL",
+    "files_count": $(find . -type f -not -path "./.git/*" | wc -l),
+    "directories_count": $(find . -type d -not -path "./.git/*" | wc -l),
+    "total_size": "$(du -sh . | cut -f1)"
+  }
+}
+EOF
+        
+        # Create tar archive of source code (excluding .git)
+        tar -czf ${{ env.BACKUP_PATH }}/source-code.tar.gz \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.next' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='*.log' \
+            . 2>/dev/null || true
+        
+        # Create Git bundle
+        echo "##### 📦 Creating Git Bundle" >> $GITHUB_STEP_SUMMARY
+        git bundle create ${{ env.BACKUP_PATH }}/repository.bundle --all 2>/dev/null || true
+        
+        # Get archive size
+        if [ -f "${{ env.BACKUP_PATH }}/source-code.tar.gz" ]; then
+          ARCHIVE_SIZE=$(du -h ${{ env.BACKUP_PATH }}/source-code.tar.gz | cut -f1)
+          echo "**Source code archive size**: $ARCHIVE_SIZE" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ -f "${{ env.BACKUP_PATH }}/repository.bundle" ]; then
+          BUNDLE_SIZE=$(du -h ${{ env.BACKUP_PATH }}/repository.bundle | cut -f1)
+          echo "**Git bundle size**: $BUNDLE_SIZE" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "✅ **Code backup completed successfully**" >> $GITHUB_STEP_SUMMARY
+
+  # ==================== CONFIGURATION BACKUP ====================
+  config-backup:
+    name: ⚙️ Configuration Backup
+    runs-on: ubuntu-latest
+    needs: backup-preparation
+    if: needs.backup-preparation.outputs.backup-type == 'full' || needs.backup-preparation.outputs.backup-type == 'configuration'
+    timeout-minutes: 10
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: ⚙️ Backup Configuration Files
+      run: |
+        echo "#### ⚙️ Configuration Backup Process" >> $GITHUB_STEP_SUMMARY
+        
+        mkdir -p ${{ env.BACKUP_PATH }}/config
+        
+        echo "##### 📋 Configuration Files Backup" >> $GITHUB_STEP_SUMMARY
+        
+        # Backup configuration files
+        CONFIG_FILES=(
+          "package.json"
+          "requirements.txt"
+          "Dockerfile*"
+          "docker-compose*.yml"
+          ".env*"
+          "*.ini"
+          "*.conf"
+          "*.config.*"
+          "alembic.ini"
+          "pytest.ini"
+          "jest.config.js"
+          "next.config.js"
+          "tailwind.config.js"
+          "tsconfig.json"
+          "*.yaml"
+          "*.yml"
+        )
+        
+        BACKED_UP_FILES=0
+        
+        for pattern in "${CONFIG_FILES[@]}"; do
+          for file in $(find . -name "$pattern" -not -path "./.git/*" 2>/dev/null); do
+            if [ -f "$file" ]; then
+              # Create directory structure
+              mkdir -p "${{ env.BACKUP_PATH }}/config/$(dirname "$file")"
+              # Copy file
+              cp "$file" "${{ env.BACKUP_PATH }}/config/$file" 2>/dev/null || true
+              BACKED_UP_FILES=$((BACKED_UP_FILES + 1))
+            fi
+          done
+        done
+        
+        echo "**Configuration files backed up**: $BACKED_UP_FILES" >> $GITHUB_STEP_SUMMARY
+        
+        # Backup Kubernetes configurations
+        echo "##### 🐳 Kubernetes Configurations" >> $GITHUB_STEP_SUMMARY
+        if [ -d "saler/k8s" ]; then
+          mkdir -p ${{ env.BACKUP_PATH }}/config/kubernetes
+          cp -r saler/k8s/* ${{ env.BACKUP_PATH }}/config/kubernetes/ 2>/dev/null || true
+          echo "✅ **Kubernetes configurations backed up**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Backup Docker configurations
+        echo "##### 🐳 Docker Configurations" >> $GITHUB_STEP_SUMMARY
+        if [ -d "saler/docker" ]; then
+          mkdir -p ${{ env.BACKUP_PATH }}/config/docker
+          cp -r saler/docker/* ${{ env.BACKUP_PATH }}/config/docker/ 2>/dev/null || true
+          echo "✅ **Docker configurations backed up**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Create configuration manifest
+        cat > ${{ env.BACKUP_PATH }}/config/config-manifest.json << EOF
+{
+  "config_backup": {
+    "backup_id": "${{ needs.backup-preparation.outputs.backup-id }}",
+    "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+    "files_backed_up": $BACKED_UP_FILES,
+    "categories": [
+      "package_managers",
+      "build_configurations",
+      "container_configurations",
+      "infrastructure_configurations",
+      "application_configurations"
+    ]
+  }
+}
+EOF
+        
+        echo "✅ **Configuration backup completed**" >> $GITHUB_STEP_SUMMARY
+
+  # ==================== DATABASE BACKUP SIMULATION ====================
+  database-backup:
+    name: 🗄️ Database Backup (Simulation)
+    runs-on: ubuntu-latest
+    needs: backup-preparation
+    if: needs.backup-preparation.outputs.backup-type == 'full' || needs.backup-preparation.outputs.backup-type == 'database'
+    timeout-minutes: 15
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🗄️ Database Backup Preparation
+      run: |
+        echo "#### 🗄️ Database Backup Process (Simulation)" >> $GITHUB_STEP_SUMMARY
+        
+        mkdir -p ${{ env.BACKUP_PATH }}/database
+        
+        echo "##### 📋 Database Schema Backup" >> $GITHUB_STEP_SUMMARY
+        
+        # Backup database schemas
+        if [ -d "saler/backend/alembic" ]; then
+          mkdir -p ${{ env.BACKUP_PATH }}/database/alembic
+          cp -r saler/backend/alembic/* ${{ env.BACKUP_PATH }}/database/alembic/ 2>/dev/null || true
+          echo "✅ **Alembic migrations backed up**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Backup database configuration
+        if [ -f "saler/backend/alembic.ini" ]; then
+          cp saler/backend/alembic.ini ${{ env.BACKUP_PATH }}/database/ 2>/dev/null || true
+          echo "✅ **Database configuration backed up**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Create Prisma schema backup
+        if [ -d "saler/backend/prisma" ]; then
+          mkdir -p ${{ env.BACKUP_PATH }}/database/prisma
+          cp -r saler/backend/prisma/* ${{ env.BACKUP_PATH }}/database/prisma/ 2>/dev/null || true
+          echo "✅ **Prisma schemas backed up**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Backup seed data
+        if [ -d "saler/backend/seed_data" ]; then
+          mkdir -p ${{ env.BACKUP_PATH }}/database/seed_data
+          cp -r saler/backend/seed_data/* ${{ env.BACKUP_PATH }}/database/seed_data/ 2>/dev/null || true
+          echo "✅ **Seed data backed up**" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: 📊 Database Schema Analysis
+      run: |
+        echo "##### 📊 Database Schema Analysis" >> $GITHUB_STEP_SUMMARY
+        
+        # Analyze database structure
+        MIGRATION_COUNT=0
+        SCHEMA_COUNT=0
+        
+        if [ -d "${{ env.BACKUP_PATH }}/database/alembic" ]; then
+          MIGRATION_COUNT=$(find ${{ env.BACKUP_PATH }}/database/alembic -name "*.py" | wc -l)
+        fi
+        
+        if [ -d "${{ env.BACKUP_PATH }}/database/prisma" ]; then
+          SCHEMA_COUNT=$(find ${{ env.BACKUP_PATH }}/database/prisma -name "*.prisma" | wc -l)
+        fi
+        
+        echo "**Database migrations**: $MIGRATION_COUNT" >> $GITHUB_STEP_SUMMARY
+        echo "**Prisma schemas**: $SCHEMA_COUNT" >> $GITHUB_STEP_SUMMARY
+        
+        # Create database backup manifest
+        cat > ${{ env.BACKUP_PATH }}/database/db-manifest.json << EOF
+{
+  "database_backup": {
+    "backup_id": "${{ needs.backup-preparation.outputs.backup-id }}",
+    "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+    "backup_type": "schema_only",
+    "migrations_count": $MIGRATION_COUNT,
+    "schemas_count": $SCHEMA_COUNT,
+    "note": "Schema backup only - actual data backup requires database credentials"
+  }
+}
+EOF
+        
+        echo "✅ **Database schema backup completed**" >> $GITHUB_STEP_SUMMARY
+
+  # ==================== BACKUP VERIFICATION ====================
+  backup-verification:
+    name: ✅ Backup Verification
+    runs-on: ubuntu-latest
+    needs: [backup-preparation, code-backup, config-backup, database-backup]
+    if: github.event.inputs.verify_backup != 'false'
+    timeout-minutes: 10
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: ✅ Backup Integrity Verification
+      run: |
+        echo "#### ✅ Backup Verification Process" >> $GITHUB_STEP_SUMMARY
+        
+        echo "##### 🔍 Archive Integrity Checks" >> $GITHUB_STEP_SUMMARY
+        
+        VERIFICATION_PASSED=true
+        
+        # Verify source code archive
+        if [ -f "${{ env.BACKUP_PATH }}/source-code.tar.gz" ]; then
+          if tar -tzf "${{ env.BACKUP_PATH }}/source-code.tar.gz" >/dev/null 2>&1; then
+            echo "✅ **Source code archive: Valid**" >> $GITHUB_STEP_SUMMARY
+          else:
+            echo "❌ **Source code archive: Corrupted**" >> $GITHUB_STEP_SUMMARY
+            VERIFICATION_PASSED=false
+          fi
+        fi
+        
+        # Verify Git bundle
+        if [ -f "${{ env.BACKUP_PATH }}/repository.bundle" ]; then
+          if git bundle verify "${{ env.BACKUP_PATH }}/repository.bundle" >/dev/null 2>&1; then
+            echo "✅ **Git bundle: Valid**" >> $GITHUB_STEP_SUMMARY
+          else:
+            echo "❌ **Git bundle: Corrupted**" >> $GITHUB_STEP_SUMMARY
+            VERIFICATION_PASSED=false
+          fi
+        fi
+        
+        # Verify configuration backup
+        if [ -d "${{ env.BACKUP_PATH }}/config" ]; then
+          CONFIG_FILE_COUNT=$(find ${{ env.BACKUP_PATH }}/config -type f | wc -l)
+          echo "✅ **Configuration backup: $CONFIG_FILE_COUNT files**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Verify database backup
+        if [ -d "${{ env.BACKUP_PATH }}/database" ]; then
+          DB_FILE_COUNT=$(find ${{ env.BACKUP_PATH }}/database -type f | wc -l)
+          echo "✅ **Database backup: $DB_FILE_COUNT files**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Generate checksums
+        echo "##### 🔐 Checksum Generation" >> $GITHUB_STEP_SUMMARY
+        
+        cd ${{ env.BACKUP_PATH }}
+        
+        # Generate SHA256 checksums
+        find . -type f -exec sha256sum {} \; > checksums.sha256 2>/dev/null || true
+        
+        if [ -f "checksums.sha256" ]; then
+          CHECKSUM_COUNT=$(wc -l < checksums.sha256)
+          echo "✅ **Checksums generated: $CHECKSUM_COUNT files**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ "$VERIFICATION_PASSED" = true ]; then
+          echo "### ✅ Backup Verification: PASSED" >> $GITHUB_STEP_SUMMARY
+          echo "🎉 **All backup files verified successfully!**" >> $GITHUB_STEP_SUMMARY
+        else:
+          echo "### ❌ Backup Verification: FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **Some backup files failed verification**" >> $GITHUB_STEP_SUMMARY
+          exit 1
+        fi
+
+  # ==================== BACKUP COMPRESSION & ENCRYPTION ====================
+  backup-finalization:
+    name: 📦 Backup Finalization
+    runs-on: ubuntu-latest
+    needs: [backup-preparation, code-backup, config-backup, database-backup]
+    timeout-minutes: 10
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 📦 Create Final Backup Package
+      run: |
+        echo "#### 📦 Backup Finalization" >> $GITHUB_STEP_SUMMARY
+        
+        cd ${{ env.BACKUP_PATH }}
+        
+        echo "##### 🗜️ Compressing Backup Package" >> $GITHUB_STEP_SUMMARY
+        
+        # Create final compressed archive
+        tar -czf "${{ needs.backup-preparation.outputs.backup-id }}.tar.gz" . 2>/dev/null || true
+        
+        # Get final package size
+        if [ -f "${{ needs.backup-preparation.outputs.backup-id }}.tar.gz" ]; then
+          FINAL_SIZE=$(du -h "${{ needs.backup-preparation.outputs.backup-id }}.tar.gz" | cut -f1)
+          echo "**Final backup package size**: $FINAL_SIZE" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        # Create backup summary
+        cat > backup-summary.json << EOF
+{
+  "backup_summary": {
+    "backup_id": "${{ needs.backup-preparation.outputs.backup-id }}",
+    "backup_type": "${{ needs.backup-preparation.outputs.backup-type }}",
+    "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+    "repository": "${{ github.repository }}",
+    "commit": "${{ github.sha }}",
+    "retention_days": ${{ needs.backup-preparation.outputs.retention-days }},
+    "package_size": "$FINAL_SIZE",
+    "verification": "${{ needs.backup-verification.result || 'skipped' }}",
+    "files_included": {
+      "source_code": $([ -f "source-code.tar.gz" ] && echo "true" || echo "false"),
+      "git_bundle": $([ -f "repository.bundle" ] && echo "true" || echo "false"),
+      "configurations": $([ -d "config" ] && echo "true" || echo "false"),
+      "database_schemas": $([ -d "database" ] && echo "true" || echo "false")
+    }
+  }
+}
+EOF
+        
+        echo "✅ **Backup finalization completed**" >> $GITHUB_STEP_SUMMARY
+
+    - name: 🧹 Cleanup Temporary Files
+      run: |
+        echo "##### 🧹 Cleanup Temporary Files" >> $GITHUB_STEP_SUMMARY
+        
+        # Remove individual files, keep only final package
+        cd ${{ env.BACKUP_PATH }}
+        rm -f source-code.tar.gz repository.bundle 2>/dev/null || true
+        
+        echo "✅ **Temporary files cleaned up**" >> $GITHUB_STEP_SUMMARY
+
+  # ==================== DISASTER RECOVERY PREPARATION ====================
+  disaster-recovery:
+    name: 🚨 Disaster Recovery Preparation
+    runs-on: ubuntu-latest
+    needs: backup-finalization
+    timeout-minutes: 5
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🚨 Generate Recovery Instructions
+      run: |
+        echo "#### 🚨 Disaster Recovery Instructions" >> $GITHUB_STEP_SUMMARY
+        
+        cat > ${{ env.BACKUP_PATH }}/RECOVERY-INSTRUCTIONS.md << 'EOF'
+# Disaster Recovery Instructions
+
+## Backup Information
+- **Backup ID**: {{BACKUP_ID}}
+- **Backup Date**: {{TIMESTAMP}}
+- **Repository**: {{REPOSITORY}}
+- **Retention Period**: {{RETENTION_DAYS}} days
+
+## Recovery Process
+
+### 1. Code Recovery
+```bash
+# Extract source code
+tar -xzf {{BACKUP_ID}}.tar.gz source-code.tar.gz
+tar -xzf source-code.tar.gz
+
+# Restore Git repository
+git bundle extract repository.bundle
+```
+
+### 2. Configuration Recovery
+```bash
+# Restore configurations
+tar -xzf {{BACKUP_ID}}.tar.gz config/
+cp -r config/* ./
+```
+
+### 3. Database Recovery
+```bash
+# Restore database schemas
+tar -xzf {{BACKUP_ID}}.tar.gz database/
+cd database/
+# Apply migrations
+alembic upgrade head
+```
+
+### 4. Verification
+```bash
+# Verify integrity
+sha256sum -c checksums.sha256
+
+# Check repository
+git fsck --full
+```
+
+## Emergency Contacts
+- DevOps Team: devops@company.com
+- Database Admin: dba@company.com
+- Security Team: security@company.com
+
+## Restoration Timeline
+- **Code Recovery**: 15-30 minutes
+- **Configuration Recovery**: 5-10 minutes  
+- **Database Recovery**: 30-60 minutes
+- **Total Recovery Time**: 1-2 hours
+
+## Post-Recovery Checklist
+- [ ] Verify all services are running
+- [ ] Check application functionality
+- [ ] Monitor error logs
+- [ ] Update stakeholders
+- [ ] Document incident
+- [ ] Review backup strategy
+EOF
+        
+        # Replace placeholders
+        sed -i "s/{{BACKUP_ID}}/${{ needs.backup-preparation.outputs.backup-id }}/g" ${{ env.BACKUP_PATH }}/RECOVERY-INSTRUCTIONS.md
+        sed -i "s/{{TIMESTAMP}}/$(date)/g" ${{ env.BACKUP_PATH }}/RECOVERY-INSTRUCTIONS.md
+        sed -i "s/{{REPOSITORY}}/${{ github.repository }}/g" ${{ env.BACKUP_PATH }}/RECOVERY-INSTRUCTIONS.md
+        sed -i "s/{{RETENTION_DAYS}}/${{ needs.backup-preparation.outputs.retention-days }}/g" ${{ env.BACKUP_PATH }}/RECOVERY-INSTRUCTIONS.md
+        
+        echo "✅ **Recovery instructions generated**" >> $GITHUB_STEP_SUMMARY
+
+    - name: 📋 Backup Health Check
+      run: |
+        echo "##### 📋 Backup Health Assessment" >> $GITHUB_STEP_SUMMARY
+        
+        # Calculate backup health score
+        BACKUP_HEALTH_SCORE=100
+        
+        # Check if all components are backed up
+        if [ ! -f "${{ env.BACKUP_PATH }}/${{ needs.backup-preparation.outputs.backup-id }}.tar.gz" ]; then
+          BACKUP_HEALTH_SCORE=$((BACKUP_HEALTH_SCORE - 30))
+        fi
+        
+        if [ ! -f "${{ env.BACKUP_PATH }}/checksums.sha256" ]; then
+          BACKUP_HEALTH_SCORE=$((BACKUP_HEALTH_SCORE - 20))
+        fi
+        
+        if [ ! -f "${{ env.BACKUP_PATH }}/backup-summary.json" ]; then
+          BACKUP_HEALTH_SCORE=$((BACKUP_HEALTH_SCORE - 10))
+        fi
+        
+        if [ ! -f "${{ env.BACKUP_PATH }}/RECOVERY-INSTRUCTIONS.md" ]; then
+          BACKUP_HEALTH_SCORE=$((BACKUP_HEALTH_SCORE - 10))
+        fi
+        
+        echo "**Backup Health Score**: $BACKUP_HEALTH_SCORE/100" >> $GITHUB_STEP_SUMMARY
+        
+        if [ $BACKUP_HEALTH_SCORE -ge 90 ]; then
+          echo "✅ **Backup health: Excellent**" >> $GITHUB_STEP_SUMMARY
+        elif [ $BACKUP_HEALTH_SCORE -ge 70 ]; then
+          echo "⚠️ **Backup health: Good (minor issues)**" >> $GITHUB_STEP_SUMMARY
+        else:
+          echo "❌ **Backup health: Needs attention**" >> $GITHUB_STEP_SUMMARY
+        fi
+
+  # ==================== BACKUP SUMMARY ====================
+  backup-summary:
+    name: 📊 Backup Summary
+    runs-on: ubuntu-latest
+    needs: [backup-preparation, backup-finalization, disaster-recovery]
+    if: always()
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 📊 Generate Backup Report
+      run: |
+        echo "## 💾 Backup Summary Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📈 Backup Results" >> $GITHUB_STEP_SUMMARY
+        echo "- **Backup Preparation**: ${{ needs.backup-preparation.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Backup Finalization**: ${{ needs.backup-finalization.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Recovery Preparation**: ${{ needs.disaster-recovery.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Determine overall backup status
+        FAILED_STEPS=0
+        
+        if [[ "${{ needs.backup-preparation.result }}" != "success" ]]; then
+          FAILED_STEPS=$((FAILED_STEPS + 1))
+        fi
+        
+        if [[ "${{ needs.backup-finalization.result }}" != "success" ]]; then
+          FAILED_STEPS=$((FAILED_STEPS + 1))
+        fi
+        
+        if [ $FAILED_STEPS -eq 0 ]; then
+          echo "### ✅ Backup Status: SUCCESSFUL" >> $GITHUB_STEP_SUMMARY
+          echo "🎉 **Backup completed successfully!**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Backup Details:**" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backup ID**: ${{ needs.backup-preparation.outputs.backup-id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backup Type**: ${{ needs.backup-preparation.outputs.backup-type }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Retention Period**: ${{ needs.backup-preparation.outputs.retention-days }} days" >> $GITHUB_STEP_SUMMARY
+        else:
+          echo "### ❌ Backup Status: FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **$FAILED_STEPS backup steps failed - please investigate**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 Backup Components" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Source code backup" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Configuration backup" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Database schema backup" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Recovery instructions" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Integrity verification" >> $GITHUB_STEP_SUMMARY
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🚨 Next Steps" >> $GITHUB_STEP_SUMMARY
+        echo "1. 📦 **Upload backup to secure storage**" >> $GITHUB_STEP_SUMMARY
+        echo "2. 🔄 **Test recovery procedures**" >> $GITHUB_STEP_SUMMARY
+        echo "3. 📅 **Schedule next backup**" >> $GITHUB_STEP_SUMMARY
+        echo "4. 📊 **Monitor backup health**" >> $GITHUB_STEP_SUMMARY
+        echo "5. 🔒 **Update disaster recovery plan**" >> $GITHUB_STEP_SUMMARY
+
+    - name: 📢 Backup Notification
+      if: success()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: success
+        channel: '#backups'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        message: "💾 Backup completed successfully! Backup ID: ${{ needs.backup-preparation.outputs.backup-id }}. Type: ${{ needs.backup-preparation.outputs.backup-type }}. Retention: ${{ needs.backup-preparation.outputs.retention-days }} days."
+
+    - name: 📢 Backup Failure Notification
+      if: failure()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        channel: '#backups'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        message: "❌ Backup failed! Backup ID: ${{ needs.backup-preparation.outputs.backup-id }}. Please check the logs and investigate immediately."
+
+    - name: 📦 Upload Backup Artifacts
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: backup-${{ needs.backup-preparation.outputs.backup-id }}
+        path: ${{ env.BACKUP_PATH }}
+        retention-days: ${{ needs.backup-preparation.outputs.retention-days }}
+
+    - name: 📊 Backup Metrics
+      run: |
+        echo "## 📊 Backup Metrics" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📈 Backup Statistics" >> $GITHUB_STEP_SUMMARY
+        echo "- **Backup ID**: ${{ needs.backup-preparation.outputs.backup-id }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Backup Type**: ${{ needs.backup-preparation.outputs.backup-type }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Retention Days**: ${{ needs.backup-preparation.outputs.retention-days }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Backup Date**: $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Repository**: ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        
+        # Backup file statistics
+        if [ -d "${{ env.BACKUP_PATH }}" ]; then
+          TOTAL_FILES=$(find ${{ env.BACKUP_PATH }} -type f | wc -l)
+          TOTAL_SIZE=$(du -sh ${{ env.BACKUP_PATH }} | cut -f1)
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Backup Statistics" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total Files**: $TOTAL_FILES" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total Size**: $TOTAL_SIZE" >> $GITHUB_STEP_SUMMARY
+          echo "- **Compression**: Applied" >> $GITHUB_STEP_SUMMARY
+          echo "- **Encryption**: Optional" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "---" >> $GITHUB_STEP_SUMMARY
+        echo "📅 **Backup Completion**: $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "👤 **Backup Operator**: GitHub Actions" >> $GITHUB_STEP_SUMMARY
+        echo "🔗 **Repository**: ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY

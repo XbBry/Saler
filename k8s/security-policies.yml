@@ -1,0 +1,836 @@
+# Kubernetes Security Policies for Saler
+# ======================================
+
+# 1. Network Policies
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: saler-network-policy
+  namespace: saler
+  labels:
+    app: saler
+    component: network-policy
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  # Allow DNS queries
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow monitoring from Prometheus namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+  # Allow ingress from nginx-ingress namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+  # Allow communication within saler namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: saler
+  egress:
+  # Allow DNS queries
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow HTTPS to external APIs
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow HTTP for Let's Encrypt
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 80
+
+---
+# Network Policy for Backend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: saler-backend-network-policy
+  namespace: saler
+  labels:
+    app: saler-backend
+spec:
+  podSelector:
+    matchLabels:
+      app: saler-backend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from frontend
+  - from:
+    - podSelector:
+        matchLabels:
+          app: saler-frontend
+    ports:
+    - protocol: TCP
+      port: 8000
+  # Allow from nginx-ingress
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8000
+  # Allow from monitoring namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  # Allow to PostgreSQL
+  - to:
+    - podSelector:
+        matchLabels:
+          app: saler-postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow to Redis
+  - to:
+    - podSelector:
+        matchLabels:
+          app: saler-redis
+    ports:
+    - protocol: TCP
+      port: 6379
+
+---
+# Network Policy for Frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: saler-frontend-network-policy
+  namespace: saler
+  labels:
+    app: saler-frontend
+spec:
+  podSelector:
+    matchLabels:
+      app: saler-frontend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from nginx-ingress
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 80
+  # Allow from monitoring namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 80
+  egress:
+  # Allow to backend
+  - to:
+    - podSelector:
+        matchLabels:
+          app: saler-backend
+    ports:
+    - protocol: TCP
+      port: 8000
+
+---
+# Network Policy for PostgreSQL
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: saler-postgres-network-policy
+  namespace: saler
+  labels:
+    app: saler-postgres
+spec:
+  podSelector:
+    matchLabels:
+      app: saler-postgres
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow from backend
+  - from:
+    - podSelector:
+        matchLabels:
+          app: saler-backend
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow from monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9187
+
+---
+# Network Policy for Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: saler-redis-network-policy
+  namespace: saler
+  labels:
+    app: saler-redis
+spec:
+  podSelector:
+    matchLabels:
+      app: saler-redis
+  policyTypes:
+  - Ingress
+  ingress:
+  # Allow from backend
+  - from:
+    - podSelector:
+        matchLabels:
+          app: saler-backend
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow from monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9121
+
+---
+
+# 2. Pod Security Standards
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: saler
+  labels:
+    name: saler
+    environment: production
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+
+---
+
+# 3. Security Context Constraints
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: saler-scc
+  labels:
+    app: saler
+allowHostDirVolumePlugin: false
+allowHostIPC: false
+allowHostNetwork: false
+allowHostPID: false
+allowHostPorts: false
+allowPrivilegedContainer: false
+allowedCapabilities: []
+defaultAddCapabilities: []
+fsGroup:
+  type: MustRunAs
+  ranges:
+  - max: 65535
+    min: 1001
+readOnlyRootFilesystem: false
+requiredDropCapabilities:
+- ALL
+runAsUser:
+  type: MustRunAsNonRoot
+  uid:
+    min: 1001
+    max: 65535
+seLinuxContext:
+  type: MustRunAs
+  seLinuxOptions:
+    level: s0:c123,c456
+supplementalGroups:
+  type: MustRunAs
+  ranges:
+  - max: 65535
+    min: 1001
+volumes:
+- configMap
+- downwardAPI
+- emptyDir
+- projected
+- secret
+- persistentVolumeClaim
+
+---
+
+# 4. RBAC (Role-Based Access Control)
+
+# Service Accounts
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: saler-backend
+  namespace: saler
+  labels:
+    app: saler-backend
+automountServiceAccountToken: false
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: saler-frontend
+  namespace: saler
+  labels:
+    app: saler-frontend
+automountServiceAccountToken: false
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: saler-postgres
+  namespace: saler
+  labels:
+    app: saler-postgres
+automountServiceAccountToken: false
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: saler-redis
+  namespace: saler
+  labels:
+    app: saler-redis
+automountServiceAccountToken: false
+
+---
+
+# Roles
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: saler
+  name: saler-backend-role
+  labels:
+    app: saler-backend
+rules:
+- apiGroups: [""]
+  resources: ["secrets", "configmaps"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: saler
+  name: saler-readonly-role
+  labels:
+    app: saler
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints", "configmaps"]
+  verbs: ["get", "list"]
+
+---
+
+# Role Bindings
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: saler-backend-rolebinding
+  namespace: saler
+  labels:
+    app: saler-backend
+subjects:
+- kind: ServiceAccount
+  name: saler-backend
+  namespace: saler
+roleRef:
+  kind: Role
+  name: saler-backend-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: saler-readonly-rolebinding
+  namespace: saler
+  labels:
+    app: saler
+subjects:
+- kind: ServiceAccount
+  name: saler-frontend
+  namespace: saler
+- kind: ServiceAccount
+  name: saler-postgres
+  namespace: saler
+- kind: ServiceAccount
+  name: saler-redis
+  namespace: saler
+roleRef:
+  kind: Role
+  name: saler-readonly-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+
+# 5. Pod Disruption Budgets
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: saler-backend-pdb
+  namespace: saler
+  labels:
+    app: saler-backend
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: saler-backend
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: saler-frontend-pdb
+  namespace: saler
+  labels:
+    app: saler-frontend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: saler-frontend
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: saler-postgres-pdb
+  namespace: saler
+  labels:
+    app: saler-postgres
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: saler-postgres
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: saler-redis-pdb
+  namespace: saler
+  labels:
+    app: saler-redis
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: saler-redis
+
+---
+
+# 6. Resource Quotas
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: saler-resource-quota
+  namespace: saler
+  labels:
+    app: saler
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    persistentvolumeclaims: "4"
+    pods: "20"
+    services: "10"
+    secrets: "10"
+    configmaps: "10"
+
+---
+
+# 7. Limit Ranges
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: saler-limit-range
+  namespace: saler
+  labels:
+    app: saler
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: "500m"
+      memory: "512Mi"
+    defaultRequest:
+      cpu: "100m"
+      memory: "128Mi"
+    max:
+      cpu: "2"
+      memory: "2Gi"
+    min:
+      cpu: "50m"
+      memory: "64Mi"
+  - type: Pod
+    max:
+      cpu: "4"
+      memory: "4Gi"
+  - type: PersistentVolumeClaim
+    max:
+      storage: "20Gi"
+
+---
+
+# 8. Service Monitor for Security Metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: saler-security-metrics
+  namespace: saler
+  labels:
+    app: saler
+    component: security
+spec:
+  selector:
+    matchLabels:
+      app: saler-backend
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+    - saler
+
+---
+
+# 9. HorizontalPodAutoscaler with security considerations
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: saler-backend-hpa
+  namespace: saler
+  labels:
+    app: saler-backend
+    component: autoscaling
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: saler-backend
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Min
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 4
+        periodSeconds: 15
+      selectPolicy: Max
+
+---
+
+# 10. Vertical Pod Autoscaler
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: saler-backend-vpa
+  namespace: saler
+  labels:
+    app: saler-backend
+    component: autoscaling
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: saler-backend
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: saler-backend
+      maxAllowed:
+        cpu: "2"
+        memory: "2Gi"
+      minAllowed:
+        cpu: "100m"
+        memory: "128Mi"
+
+---
+
+# 11. Priority Classes
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: saler-critical
+  labels:
+    app: saler
+    component: priority
+value: 1000
+globalDefault: false
+description: "Critical production workloads for Saler application"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: saler-high
+  labels:
+    app: saler
+    component: priority
+value: 800
+globalDefault: false
+description: "High priority workloads for Saler application"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: saler-normal
+  labels:
+    app: saler
+    component: priority
+value: 500
+globalDefault: true
+description: "Normal priority workloads for Saler application"
+
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: saler-low
+  labels:
+    app: saler
+    component: priority
+value: 100
+globalDefault: false
+description: "Low priority workloads for Saler application"
+
+---
+
+# 12. Pod Security Policy (if not using Pod Security Standards)
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: saler-psp
+  labels:
+    app: saler
+    component: security
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'persistentVolumeClaim'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  seLinux:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1
+        max: 65535
+  supplementalGroups:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1
+        max: 65535
+  readOnlyRootFilesystem: false
+
+---
+
+# 13. Security Context for Deployments
+# This is typically applied in the deployment manifests, but here's an example:
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: saler-security-config
+  namespace: saler
+  labels:
+    app: saler
+    component: security
+data:
+  security_context: |
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1001
+      runAsGroup: 1001
+      fsGroup: 1001
+      seccompProfile:
+        type: RuntimeDefault
+      capabilities:
+        drop:
+        - ALL
+        add: []
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 1001
+      runAsGroup: 1001
+      fsGroup: 1001
+      seccompProfile:
+        type: RuntimeDefault
+
+---
+
+# 14. Network Security Groups (if using cloud providers)
+# These would be implemented as part of cloud provider configurations
+# but here's documentation for reference:
+
+# AWS Security Groups:
+# - saler-backend-sg: Allow 8000 from saler-frontend-sg and saler-ingress-sg
+# - saler-frontend-sg: Allow 80 from internet and 8000 to saler-backend-sg
+# - saler-postgres-sg: Allow 5432 from saler-backend-sg
+# - saler-redis-sg: Allow 6379 from saler-backend-sg
+
+# Azure Network Security Groups:
+# - Frontend NSG: Allow 80/443 from internet
+# - Backend NSG: Allow 8000 from Frontend NSG
+# - Database NSG: Allow 5432 from Backend NSG
+
+# GCP Firewall Rules:
+# - Allow 80/443 from internet to frontend
+# - Allow 8000 from frontend to backend
+# - Allow 5432 from backend to database
+# - Allow 6379 from backend to redis
+
+---
+
+# 15. Admission Controllers (to be configured at cluster level)
+# Required admission controllers:
+# - PodSecurityPolicy
+# - NodeRestriction
+# - PodNodeSelector
+# - EventRateLimit
+# - AlwaysPullImages
+# - ImagePolicyWebhook
+# - SecurityContextDeny
+# - ServiceAccount
+# - ResourceQuota
+# - LimitRanger
+# - Initializers
+# - DefaultStorageClass
+# - DefaultTolerationSeconds
+# - MutatingAdmissionWebhook
+# - ValidatingAdmissionWebhook
+# - NamespaceLifecycle
+# - CertificateSubjectRestriction
+# - LimitPodHardAntiAffinityTopology
+# - ExtendedResourceToleration
+# - TaintNodesByCondition
+# - PriorityClass
+# - AlwaysAdmit (not recommended for production)
+
+---
+
+# 16. Security Configuration for External Traffic
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: saler-external-traffic-policy
+  namespace: saler
+  labels:
+    app: saler
+    component: security
+data:
+  external_traffic_policy: |
+    # Only allow traffic from specific sources
+    allowed_sources:
+      - "10.0.0.0/8"     # Internal networks
+      - "172.16.0.0/12"  # Docker networks
+      - "192.168.0.0/16" # Private networks
+      - "203.0.113.0/24" # Documentation/test networks (TESt-NET-3)
+    
+    # Block common attack patterns
+    blocked_patterns:
+      - "sql injection attempts"
+      - "xss attempts"
+      - "directory traversal"
+      - "command injection"
+    
+    # Rate limiting
+    rate_limits:
+      - "100 requests per minute per IP"
+      - "1000 requests per hour per IP"
+      - "10000 requests per day per IP"

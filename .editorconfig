@@ -1,0 +1,172 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# top-most EditorConfig file
+root = true
+
+# All files
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# Python files
+[*.py]
+indent_style = space
+indent_size = 4
+max_line_length = 88
+# Python specific settings for Black
+[*.{py,pyi}]
+quote_type = single
+hang_indent = false
+
+# JavaScript, TypeScript, JSX, TSX
+[*.{js,jsx,ts,tsx}]
+indent_style = space
+indent_size = 2
+max_line_length = 100
+
+# JSON files
+[*.{json,jsonc}]
+indent_style = space
+indent_size = 2
+max_line_length = 120
+
+# YAML files
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+max_line_length = 120
+
+# Markdown files
+[*.{md,mdx}]
+indent_style = space
+indent_size = 2
+max_line_length = 100
+
+# HTML files
+[*.{html,htm}]
+indent_style = space
+indent_size = 2
+max_line_length = 120
+
+# CSS, SCSS, SASS, LESS
+[*.{css,scss,sass,less}]
+indent_style = space
+indent_size = 2
+max_line_length = 120
+
+# Dockerfile
+[{Dockerfile*,*.dockerfile}]
+indent_style = space
+indent_size = 4
+
+# Shell scripts
+[*.{sh,bash,zsh,fish}]
+indent_style = space
+indent_size = 2
+max_line_length = 120
+
+# Makefile
+[Makefile]
+indent_style = tab
+indent_size = 4
+
+# package.json, .gitignore, etc.
+[{package.json,.gitignore,*.lock}]
+indent_style = space
+indent_size = 2
+
+# Configuration files
+[{*.conf,*.ini,*.cfg,*.config}]
+indent_style = space
+indent_size = 2
+
+# SQL files
+[*.{sql,sqlx}]
+indent_style = space
+indent_size = 2
+max_line_length = 120
+
+# XML files
+[*.xml]
+indent_style = space
+indent_size = 2
+max_line_length = 120
+
+# Log files
+[*.log]
+insert_final_newline = false
+trim_trailing_whitespace = false
+
+# Binary files
+[*.{pdf,ico,jpg,jpeg,png,gif,bmp,tiff,tif,svg,woff,woff2,eot,ttf,otf,mp3,mp4,avi,mov,wmv,flv,webm,zip,rar,7z,gz,tar}]
+insert_final_newline = false
+trim_trailing_whitespace = false
+
+# Documentation files
+[*.{rst,rstx}]
+indent_style = space
+indent_size = 3
+max_line_length = 80
+
+# LaTeX files
+[*.{tex,ltx}]
+indent_style = space
+indent_size = 2
+max_line_length = 80
+
+# C/C++ files
+[*.{c,cpp,h,hpp,cc,cxx,hxx}]
+indent_style = space
+indent_size = 4
+max_line_length = 80
+
+# Java files
+[*.java]
+indent_style = space
+indent_size = 4
+max_line_length = 80
+
+# Go files
+[*.go]
+indent_style = tab
+indent_size = 4
+max_line_length = 120
+
+# Rust files
+[*.rs]
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
+# PHP files
+[*.php]
+indent_style = space
+indent_size = 4
+max_line_length = 120
+
+# Ruby files
+[*.rb]
+indent_style = space
+indent_size = 2
+max_line_length = 120
+
+# Lua files
+[*.lua]
+indent_style = space
+indent_size = 2
+max_line_length = 120
+
+# TOML files
+[*.toml]
+indent_style = space
+indent_size = 2
+
+# GraphQL files
+[*.{graphql,gql}]
+indent_style = space
+indent_size = 2
+max_line_length = 120

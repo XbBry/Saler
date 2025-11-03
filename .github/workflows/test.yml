@@ -1,0 +1,400 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.11'
+  DATABASE_URL: postgresql://postgres:password@localhost:5432/test_db
+  REDIS_URL: redis://localhost:6379/0
+
+jobs:
+  frontend-tests:
+    runs-on: ubuntu-latest
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: 'saler/frontend/package-lock.json'
+
+    - name: Install dependencies
+      run: |
+        cd saler/frontend
+        npm ci
+        npm run build
+
+    - name: Run linter
+      run: |
+        cd saler/frontend
+        npm run lint
+
+    - name: Run type checking
+      run: |
+        cd saler/frontend
+        npm run type-check
+
+    - name: Run unit tests
+      run: |
+        cd saler/frontend
+        npm run test -- --coverage --watchAll=false
+
+    - name: Run integration tests
+      run: |
+        cd saler/frontend
+        npm run test:integration
+
+    - name: Run E2E tests
+      run: |
+        cd saler/frontend
+        npm run test:e2e
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: saler/frontend/coverage/lcov.info
+        flags: frontend
+        name: frontend-coverage
+
+    - name: Performance tests
+      run: |
+        cd saler/frontend
+        npm run test:performance
+
+    - name: Accessibility tests
+      run: |
+        cd saler/frontend
+        npm run test:a11y
+
+    - name: Visual regression tests
+      run: |
+        cd saler/frontend
+        npm run test:visual
+
+  backend-tests:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: false
+          ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+        ports:
+          - 9200:9200
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        cache-dependency-path: 'saler/backend/requirements.txt'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          postgresql-client \
+          redis-tools \
+          curl \
+          jq
+
+    - name: Install Python dependencies
+      run: |
+        cd saler/backend
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+
+    - name: Setup database
+      run: |
+        cd saler/backend
+        python -m alembic upgrade head
+
+    - name: Run linting
+      run: |
+        cd saler/backend
+        flake8 app/ tests/
+        black --check app/ tests/
+        isort --check-only app/ tests/
+        mypy app/
+
+    - name: Run security tests
+      run: |
+        cd saler/backend
+        bandit -r app/ -f json -o bandit-report.json || true
+        safety check --json --output safety-report.json || true
+        semgrep --config=auto --json --output=semgrep-report.json app/ || true
+
+    - name: Run unit tests
+      run: |
+        cd saler/backend
+        pytest tests/ -v --cov=app --cov-report=xml --cov-report=html --cov-fail-under=80
+
+    - name: Run integration tests
+      run: |
+        cd saler/backend
+        pytest tests/integration/ -v
+
+    - name: Run API tests
+      run: |
+        cd saler/backend
+        pytest tests/test_*.py -v --maxfail=5
+
+    - name: Run database migration tests
+      run: |
+        cd saler/backend
+        python -m alembic upgrade head
+        python -m alembic downgrade -1
+        python -m alembic upgrade head
+
+    - name: Run performance tests
+      run: |
+        cd saler/backend
+        pytest tests/performance/ -v
+
+    - name: Run security tests
+      run: |
+        cd saler/backend
+        pytest tests/security/ -v
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: saler/backend/coverage.xml
+        flags: backend
+        name: backend-coverage
+
+  docker-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build Docker images
+      run: |
+        docker build -t saler-frontend:test ./saler/frontend
+        docker build -t saler-backend:test ./saler/backend
+
+    - name: Run container tests
+      run: |
+        cd saler
+        docker-compose -f docker-compose.test.yml up --abort-on-container-exit
+
+    - name: Test container health
+      run: |
+        docker exec saler-backend-test python -c "import app.main; print('Backend OK')"
+        docker exec saler-frontend-test npm test
+
+    - name: Security scan Docker images
+      run: |
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+          aquasec/trivy image saler-frontend:test
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+          aquasec/trivy image saler-backend:test
+
+  load-tests:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run load tests
+      run: |
+        cd saler
+        npm install -g k6
+        k6 run tests/load/auth-flow.js
+        k6 run tests/load/api-endpoints.js
+        k6 run tests/load/websocket-connections.js
+
+    - name: Generate load test report
+      run: |
+        cd saler
+        k6 run tests/load/comprehensive.js --out json=load-test-results.json
+
+    - name: Upload load test results
+      uses: actions/upload-artifact@v3
+      with:
+        name: load-test-results
+        path: saler/load-test-results.json
+
+  security-scan:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Snyk security scan
+      uses: snyk/actions/python@master
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: --severity-threshold=high
+
+    - name: Run CodeQL analysis
+      uses: github/codeql-action/init@v2
+      with:
+        languages: python, javascript
+
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v2
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+
+  api-documentation:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Generate API documentation
+      run: |
+        cd saler/backend
+        python -m swagger_ui main:app --host 0.0.0.0 --port 8080
+        curl http://localhost:8080/docs.json > api-docs.json
+
+    - name: Validate OpenAPI spec
+      run: |
+        npm install -g @apidevtools/swagger-cli
+        swagger-cli validate saler/backend/api-docs.json
+
+    - name: Upload API documentation
+      uses: actions/upload-artifact@v3
+      with:
+        name: api-documentation
+        path: saler/backend/api-docs.json
+
+  dependency-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check for outdated dependencies
+      run: |
+        cd saler/frontend
+        npm outdated || true
+
+    - name: Check Python dependencies
+      run: |
+        cd saler/backend
+        pip install pip-tools
+        pip-compile --dry-run requirements.in || true
+
+    - name: Security audit npm packages
+      run: |
+        cd saler/frontend
+        npm audit --audit-level moderate
+
+    - name: Security audit Python packages
+      run: |
+        cd saler/backend
+        pip install safety
+        safety check --json --output safety-report.json || true
+
+  test-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+        node-version: ['16', '18', '20']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Set up Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+
+    - name: Run tests with matrix versions
+      run: |
+        cd saler/backend
+        pytest tests/ --tb=short
+        cd ../frontend
+        npm test -- --watchAll=false
+
+  notifications:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [frontend-tests, backend-tests, docker-tests, security-scan]
+    
+    steps:
+    - name: Notify test results
+      if: env.SLACK_WEBHOOK_URL != ''
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#ci-cd'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+
+    - name: Test summary
+      run: |
+        echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- Frontend Tests: ${{ needs.frontend-tests.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Backend Tests: ${{ needs.backend-tests.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Docker Tests: ${{ needs.docker-tests.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Security Scan: ${{ needs.security-scan.result }}" >> $GITHUB_STEP_SUMMARY

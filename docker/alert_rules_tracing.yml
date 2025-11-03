@@ -1,0 +1,226 @@
+# OpenTelemetry Tracing Alert Rules
+# Advanced alerting for distributed tracing system
+
+groups:
+  - name: tracing_alerts
+    interval: 30s
+    rules:
+      # High Error Rate Alert
+      - alert: HighErrorRate
+        expr: rate(traces_total{status="error"}[5m]) / rate(traces_total[5m]) * 100 > 5
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High error rate in {{ $labels.service_name }}"
+          description: "Error rate is {{ $value }}% for service {{ $labels.service_name }}"
+          runbook_url: "https://wiki.saler.com/troubleshooting/high-error-rate"
+
+      # Critical Error Rate Alert
+      - alert: CriticalErrorRate
+        expr: rate(traces_total{status="error"}[5m]) / rate(traces_total[5m]) * 100 > 15
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Critical error rate in {{ $labels.service_name }}"
+          description: "Error rate is {{ $value }}% for service {{ $labels.service_name }}"
+          runbook_url: "https://wiki.saler.com/troubleshooting/critical-error-rate"
+
+      # Slow Requests Alert
+      - alert: SlowRequests
+        expr: rate(traces_total{duration_ms > 5000}[5m]) > 1
+        for: 3m
+        labels:
+          severity: warning
+          team: performance
+        annotations:
+          summary: "Slow requests detected for {{ $labels.operation_name }}"
+          description: "{{ $value }} slow requests per second detected"
+
+      # Very Slow Requests Alert
+      - alert: VerySlowRequests
+        expr: rate(traces_total{duration_ms > 10000}[5m]) > 0.5
+        for: 2m
+        labels:
+          severity: critical
+          team: performance
+        annotations:
+          summary: "Very slow requests detected for {{ $labels.operation_name }}"
+          description: "{{ $value }} very slow requests per second detected"
+
+      # Service Unavailable Alert
+      - alert: ServiceUnavailable
+        expr: absent_over_time(traces_total[1m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Service {{ $labels.service_name }} appears to be unavailable"
+          description: "No traces received from {{ $labels.service_name }} for 2 minutes"
+
+      # Database Performance Alert
+      - alert: DatabaseSlowQueries
+        expr: rate(db_duration_ms[5m]) > 2000
+        for: 5m
+        labels:
+          severity: warning
+          team: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "Average database query duration is {{ $value }}ms"
+
+      # Redis Performance Alert
+      - alert: RedisSlowOperations
+        expr: rate(redis_duration_ms[5m]) > 100
+        for: 3m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "Slow Redis operations detected"
+          description: "Average Redis operation duration is {{ $value }}ms"
+
+      # High Throughput Alert
+      - alert: HighRequestThroughput
+        expr: rate(traces_total[1m]) > 1000
+        for: 5m
+        labels:
+          severity: info
+          team: performance
+        annotations:
+          summary: "High request throughput detected"
+          description: "{{ $value }} requests per second detected"
+
+      # Memory Usage Alert (if memory metrics available)
+      - alert: HighMemoryUsage
+        expr: process_memory_bytes > 1000000000
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value }} bytes ({{ $value | humanizeBytes }}B)"
+
+      # Trace Loss Alert
+      - alert: TraceDataLoss
+        expr: rate(traces_dropped_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Trace data loss detected"
+          description: "{{ $value }} traces per second being dropped"
+
+      # Service Health Score Alert
+      - alert: ServiceHealthDegraded
+        expr: service_health_score < 70
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Service health score degraded for {{ $labels.service_name }}"
+          description: "Health score is {{ $value }} out of 100"
+
+  - name: infrastructure_alerts
+    interval: 60s
+    rules:
+      # OpenTelemetry Collector Down
+      - alert: OpenTelemetryCollectorDown
+        expr: up{job="otel-collector"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "OpenTelemetry Collector is down"
+          description: "OpenTelemetry Collector has been down for more than 1 minute"
+
+      # Jaeger UI Down
+      - alert: JaegerUIDown
+        expr: up{job="jaeger"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Jaeger UI is down"
+          description: "Jaeger UI has been down for more than 2 minutes"
+
+  - name: business_logic_alerts
+    interval: 60s
+    rules:
+      # Authentication Failures
+      - alert: AuthenticationFailures
+        expr: rate(traces_total{operation_name=~".*auth.*"}[5m]) > 50
+        for: 3m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Authentication failures rate is {{ $value }} per second"
+
+      # Payment Processing Issues
+      - alert: PaymentProcessingErrors
+        expr: rate(traces_total{operation_name=~".*payment.*",status="error"}[5m]) > 1
+        for: 2m
+        labels:
+          severity: critical
+          team: payments
+        annotations:
+          summary: "Payment processing errors detected"
+          description: "{{ $value }} payment errors per second detected"
+
+      # Webhook Processing Failures
+      - alert: WebhookProcessingFailures
+        expr: rate(traces_total{operation_name=~".*webhook.*",status="error"}[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+          team: integrations
+        annotations:
+          summary: "Webhook processing failures detected"
+          description: "{{ $value }} webhook failures per second detected"
+
+  - name: performance_alerts
+    interval: 30s
+    rules:
+      # P99 Latency Alert
+      - alert: HighP99Latency
+        expr: histogram_quantile(0.99, rate(duration_ms_bucket[5m])) > 5000
+        for: 5m
+        labels:
+          severity: warning
+          team: performance
+        annotations:
+          summary: "High P99 latency detected"
+          description: "P99 latency is {{ $value }}ms"
+
+      # Database Connection Pool Exhaustion
+      - alert: DatabaseConnectionPoolExhausted
+        expr: db_connection_pool_active / db_connection_pool_max > 0.9
+        for: 2m
+        labels:
+          severity: warning
+          team: database
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "{{ $value | humanizePercentage }} of connection pool in use"
+
+      # Redis Memory Usage Alert
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 3m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "{{ $value | humanizePercentage }} of Redis memory in use"

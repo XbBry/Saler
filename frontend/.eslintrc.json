@@ -1,0 +1,108 @@
+{
+  "extends": [
+    "next/core-web-vitals",
+    "next/typescript",
+    "eslint:recommended",
+    "@typescript-eslint/recommended",
+    "prettier"
+  ],
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType": "module",
+    "ecmaFeatures": {
+      "jsx": true
+    }
+  },
+  "plugins": [
+    "@typescript-eslint",
+    "react",
+    "react-hooks",
+    "jsx-a11y"
+  ],
+  "rules": {
+    "prefer-const": "error",
+    "no-unused-vars": "off",
+    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-inferrable-types": "off",
+    "@typescript-eslint/explicit-function-return-type": "off",
+    "@typescript-eslint/explicit-module-boundary-types": "off",
+    "react/prop-types": "off",
+    "react/react-in-jsx-scope": "off",
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "warn",
+    "no-console": "warn",
+    "no-debugger": "error",
+    "prefer-template": "error",
+    "no-var": "error",
+    "object-shorthand": "error",
+    "prefer-destructuring": ["error", { "object": true, "array": false }],
+    "no-duplicate-imports": "error",
+    "no-template-curly-in-string": "warn",
+    "eqeqeq": ["error", "always", { "null": "ignore" }],
+    "curly": "error",
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-new-func": "error",
+    "no-script-url": "error",
+    "no-alert": "warn",
+    "no-return-assign": "error",
+    "no-self-compare": "error",
+    "no-sequences": "error",
+    "no-throw-literal": "error",
+    "no-unmodified-loop-condition": "error",
+    "no-unused-expressions": "error",
+    "no-useless-call": "error",
+    "no-useless-concat": "error",
+    "no-useless-return": "error",
+    "prefer-promise-reject-errors": "error",
+    "radix": "error",
+    "require-await": "error",
+    "yoda": "error",
+    "no-magic-numbers": ["warn", { "ignore": [0, 1, -1, 2] }],
+    "no-mixed-operators": "error",
+    "no-unneeded-ternary": "error",
+    "operator-assignment": ["error", "always"],
+    "prefer-arrow-callback": "error",
+    "prefer-const": "error",
+    "prefer-destructuring": ["error", { "object": true, "array": false }],
+    "prefer-numeric-literals": "error",
+    "prefer-object-spread": "error",
+    "prefer-template": "error",
+    "spaced-comment": ["error", "always"],
+    "arrow-body-style": ["error", "as-needed"],
+    "arrow-parens": ["error", "always"],
+    "no-confusing-arrow": "error",
+    "no-constant-condition": "error",
+    "no-else-return": "error",
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-new-func": "error",
+    "no-unused-expressions": "error",
+    "prefer-arrow-callback": "error",
+    "require-await": "error",
+    "yoda": "error"
+  },
+  "env": {
+    "browser": true,
+    "es2022": true,
+    "node": true
+  },
+  "settings": {
+    "react": {
+      "version": "detect"
+    }
+  },
+  "ignorePatterns": [
+    "node_modules/",
+    ".next/",
+    "dist/",
+    "build/",
+    "coverage/",
+    "*.config.js",
+    "*.config.ts",
+    "next.config.js",
+    "tailwind.config.js"
+  ]
+}

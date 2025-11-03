@@ -1,0 +1,348 @@
+# Recording Rules for Pre-computed Metrics
+# قواعد التسجيل للمقاييس المحسوبة مسبقاً
+
+groups:
+  - name: saler_precomputed_metrics
+    interval: 30s
+    rules:
+      # HTTP Request Rates (per minute)
+      - record: saler:http_requests_rate_1m
+        expr: rate(saler_http_requests_total[1m])
+        labels:
+          category: "performance"
+      
+      - record: saler:http_requests_rate_5m
+        expr: rate(saler_http_requests_total[5m])
+        labels:
+          category: "performance"
+      
+      - record: saler:http_requests_rate_15m
+        expr: rate(saler_http_requests_total[15m])
+        labels:
+          category: "performance"
+
+      # Error Rates
+      - record: saler:http_error_rate_1m
+        expr: |
+          (
+            rate(saler_http_requests_total{status_code=~"4..|5.."}[1m])
+            /
+            rate(saler_http_requests_total[1m])
+          ) * 100
+        labels:
+          category: "reliability"
+
+      - record: saler:http_error_rate_5m
+        expr: |
+          (
+            rate(saler_http_requests_total{status_code=~"4..|5.."}[5m])
+            /
+            rate(saler_http_requests_total[5m])
+          ) * 100
+        labels:
+          category: "reliability"
+
+      # Response Time Percentiles
+      - record: saler:http_response_time_p95_5m
+        expr: histogram_quantile(0.95, rate(saler_http_request_duration_seconds_bucket[5m]))
+        labels:
+          category: "performance"
+          percentile: "95th"
+
+      - record: saler:http_response_time_p99_5m
+        expr: histogram_quantile(0.99, rate(saler_http_request_duration_seconds_bucket[5m]))
+        labels:
+          category: "performance"
+          percentile: "99th"
+
+      # Database Performance
+      - record: saler:db_query_rate_1m
+        expr: rate(saler_database_queries_total[1m])
+        labels:
+          category: "database"
+
+      - record: saler:db_query_duration_p95_5m
+        expr: histogram_quantile(0.95, rate(saler_database_query_duration_seconds_bucket[5m]))
+        labels:
+          category: "database"
+          percentile: "95th"
+
+      # Business Metrics Aggregations
+      - record: saler:leads_created_rate_1h
+        expr: rate(saler_leads_created_total[1h])
+        labels:
+          category: "business"
+
+      - record: saler:leads_conversion_rate_1h
+        expr: |
+          (
+            rate(saler_leads_converted_total[1h])
+            /
+            rate(saler_leads_created_total[1h])
+          ) * 100
+        labels:
+          category: "business"
+
+      - record: saler:revenue_rate_1h
+        expr: rate(saler_revenue_total[1h])
+        labels:
+          category: "business"
+
+      # User Analytics
+      - record: saler:user_session_rate_1m
+        expr: rate(saler_user_sessions_total[1m])
+        labels:
+          category: "user_behavior"
+
+      - record: saler:user_active_sessions_avg_5m
+        expr: avg_over_time(saler_user_active_sessions[5m])
+        labels:
+          category: "user_behavior"
+
+      # Feature Usage
+      - record: saler:feature_usage_rate_1h
+        expr: rate(saler_feature_usage_total[1h])
+        labels:
+          category: "user_behavior"
+
+      # Security Metrics
+      - record: saler:security_events_rate_5m
+        expr: rate(saler_security_events_total[5m])
+        labels:
+          category: "security"
+
+      - record: saler:failed_logins_rate_5m
+        expr: rate(saler_failed_authentication_total[5m])
+        labels:
+          category: "security"
+
+      # Cache Performance
+      - record: saler:cache_hit_rate_5m
+        expr: |
+          (
+            rate(saler_cache_operations_total{status="hit"}[5m])
+            /
+            rate(saler_cache_operations_total[5m])
+          ) * 100
+        labels:
+          category: "cache"
+
+      - record: saler:cache_operations_rate_1m
+        expr: rate(saler_cache_operations_total[1m])
+        labels:
+          category: "cache"
+
+      # Infrastructure Metrics
+      - record: saler:cpu_usage_avg_5m
+        expr: avg_over_time(saler_cpu_usage_percent[5m])
+        labels:
+          category: "infrastructure"
+
+      - record: saler:memory_usage_avg_5m
+        expr: avg_over_time(saler_memory_usage_bytes[5m])
+        labels:
+          category: "infrastructure"
+
+      # Rate Limiting Metrics
+      - record: saler:api_rate_limit_hits_rate_5m
+        expr: rate(saler_api_rate_limit_hits_total[5m])
+        labels:
+          category: "api"
+
+      # Queue Processing Metrics
+      - record: saler:queue_processing_latency_p95_5m
+        expr: histogram_quantile(0.95, rate(saler_queue_processing_latency_seconds_bucket[5m]))
+        labels:
+          category: "performance"
+          percentile: "95th"
+
+  - name: saler_aggregated_metrics
+    interval: 5m
+    rules:
+      # Hourly Aggregations
+      - record: saler:http_requests_hourly
+        expr: sum(rate(saler_http_requests_total[1h])) by (method, endpoint, status_code)
+        labels:
+          aggregation: "hourly"
+
+      - record: saler:business_metrics_hourly
+        expr: sum(rate(saler_leads_created_total[1h])) by (source, channel)
+        labels:
+          aggregation: "hourly"
+          metric: "leads_created"
+
+      - record: saler:security_events_hourly
+        expr: sum(rate(saler_security_events_total[1h])) by (event_type, severity)
+        labels:
+          aggregation: "hourly"
+
+      # Daily Aggregations
+      - record: saler:revenue_daily
+        expr: sum(increase(saler_revenue_total[24h]))
+        labels:
+          aggregation: "daily"
+
+      - record: saler:user_sessions_daily
+        expr: sum(increase(saler_user_sessions_total[24h])) by (user_type)
+        labels:
+          aggregation: "daily"
+
+      - record: saler:feature_usage_daily
+        expr: sum(increase(saler_feature_usage_total[24h])) by (feature_name)
+        labels:
+          aggregation: "daily"
+
+  - name: saler_prediction_metrics
+    interval: 10m
+    rules:
+      # Trend Analysis
+      - record: saler:http_requests_trend_1h
+        expr: |
+          (
+            rate(saler_http_requests_total[1h]) - 
+            rate(saler_http_requests_total[2h] offset 1h)
+          ) / rate(saler_http_requests_total[2h] offset 1h)
+        labels:
+          analysis: "trend"
+
+      - record: saler:error_rate_trend_1h
+        expr: |
+          (
+            saler:http_error_rate_5m - 
+            saler:http_error_rate_5m offset 1h
+          )
+        labels:
+          analysis: "trend"
+
+      # Capacity Planning
+      - record: saler:cpu_usage_forecast_1h
+        expr: predict_linear(saler_cpu_usage_avg_5m[30m], 3600)
+        labels:
+          forecast: "cpu"
+          horizon: "1h"
+
+      - record: saler:memory_usage_forecast_1h
+        expr: predict_linear(saler_memory_usage_avg_5m[30m], 3600)
+        labels:
+          forecast: "memory"
+          horizon: "1h"
+
+      # Anomaly Detection Baselines
+      - record: saler:http_requests_baseline_7d
+        expr: avg_over_time(rate(saler_http_requests_total[5m])[7d:])
+        labels:
+          baseline: "normal"
+          period: "7d"
+
+      - record: saler:response_time_baseline_7d
+        expr: avg_over_time(saler_http_response_time_p95_5m[7d:])
+        labels:
+          baseline: "normal"
+          period: "7d"
+
+  - name: saler_sla_metrics
+    interval: 1m
+    rules:
+      # SLA Calculations
+      - record: saler:availability_sla_5m
+        expr: |
+          (
+            rate(saler_http_requests_total{status_code!~"5.."}[5m])
+            /
+            rate(saler_http_requests_total[5m])
+          ) * 100
+        labels:
+          sla: "availability"
+          target: "99.9"
+
+      - record: saler:response_time_sla_5m
+        expr: |
+          (
+            saler_http_response_time_p95_5m < 1.0
+          ) * 100
+        labels:
+          sla: "response_time"
+          target: "95th_percentile_under_1s"
+
+      - record: saler:error_rate_sla_5m
+        expr: |
+          (
+            saler:http_error_rate_5m < 0.1
+          ) * 100
+        labels:
+          sla: "error_rate"
+          target: "under_0.1%"
+
+  - name: saler_cost_metrics
+    interval: 1h
+    rules:
+      # Cost Analysis
+      - record: saler:cost_per_request_1h
+        expr: |
+          (
+            saler_revenue_total / 
+            sum(increase(saler_http_requests_total[1h]))
+          )
+        labels:
+          cost_type: "revenue_per_request"
+
+      - record: saler:cost_per_lead_1h
+        expr: |
+          (
+            sum(increase(saler_revenue_total[1h])) /
+            sum(increase(saler_leads_created_total[1h]))
+          )
+        labels:
+          cost_type: "revenue_per_lead"
+
+      - record: saler:user_acquisition_cost_1h
+        expr: |
+          (
+            sum(increase(saler_revenue_total[1h])) /
+            sum(increase(saler_user_sessions_total[1h]))
+          )
+        labels:
+          cost_type: "revenue_per_user_session"
+
+  - name: saler_business_intelligence
+    interval: 5m
+    rules:
+      # Conversion Funnel Analysis
+      - record: saler:funnel_conversion_stage_1
+        expr: rate(saler_user_sessions_total[5m])
+        labels:
+          funnel_stage: "visit"
+          category: "conversion"
+
+      - record: saler:funnel_conversion_stage_2
+        expr: rate(saler_leads_created_total[5m])
+        labels:
+          funnel_stage: "lead"
+          category: "conversion"
+
+      - record: saler:funnel_conversion_stage_3
+        expr: rate(saler_leads_converted_total[5m])
+        labels:
+          funnel_stage: "conversion"
+          category: "conversion"
+
+      # Customer Lifetime Value
+      - record: saler:clv_calculation_1d
+        expr: |
+          (
+            sum(increase(saler_revenue_total[7d])) /
+            sum(increase(saler_user_sessions_total[7d]))
+          ) * 30  # Monthly projection
+        labels:
+          metric: "customer_lifetime_value"
+
+      # Market Analysis
+      - record: saler:market_share_growth_1d
+        expr: |
+          (
+            rate(saler_revenue_total[24h]) - 
+            rate(saler_revenue_total[48h] offset 24h)
+          )
+        labels:
+          analysis: "growth"
+          period: "daily"
