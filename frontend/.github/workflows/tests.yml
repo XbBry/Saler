@@ -1,0 +1,364 @@
+name: Tests CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  NODE_VERSION: '18'
+
+jobs:
+  lint-and-type-check:
+    name: تحليل الكود وفحص الأنواع
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: استنساخ المستودع
+        uses: actions/checkout@v4
+        
+      - name: إعداد Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: تثبيت dependencies
+        run: npm ci
+        
+      - name: تشغيل ESLint
+        run: npm run lint
+        
+      - name: فحص أنواع TypeScript
+        run: npm run type-check
+        
+      - name: فحص تنسيق الكود
+        run: npm run format:check
+
+  unit-tests:
+    name: اختبارات الوحدة
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: استنساخ المستودع
+        uses: actions/checkout@v4
+        
+      - name: إعداد Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: تثبيت dependencies
+        run: npm ci
+        
+      - name: تشغيل اختبارات الوحدة
+        run: npm run test:ci
+        env:
+          NODE_ENV: test
+          
+      - name: رفع تقرير التغطية
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage/lcov.info
+          flags: unittests
+          name: unit-tests-coverage
+          
+      - name: رفع تقرير HTML للاختبارات
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-report-html
+          path: coverage/report.html
+          
+      - name: رفع بيانات التغطية
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-data
+          path: coverage/
+
+  integration-tests:
+    name: اختبارات التكامل
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: استنساخ المستودع
+        uses: actions/checkout@v4
+        
+      - name: إعداد Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: تثبيت dependencies
+        run: npm ci
+        
+      - name: تشغيل اختبارات التكامل
+        run: npm run test -- --testPathPattern=integration
+        env:
+          NODE_ENV: test
+          
+      - name: رفع تقرير اختبارات التكامل
+        uses: actions/upload-artifact@v3
+        with:
+          name: integration-test-report
+          path: coverage/integration-report.html
+
+  e2e-tests:
+    name: اختبارات End-to-End
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: استنساخ المستودع
+        uses: actions/checkout@v4
+        
+      - name: إعداد Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: تثبيت dependencies
+        run: npm ci
+        
+      - name: تثبيت Playwright
+        run: npx playwright install --with-deps
+        
+      - name: بناء التطبيق
+        run: npm run build
+        env:
+          NODE_ENV: production
+          
+      - name: تشغيل خادم الإنتاج محلياً
+        run: npm run start &
+        
+      - name: انتظار بدء الخادم
+        run: npx wait-on http://localhost:3000
+        
+      - name: تشغيل اختبارات E2E
+        run: npx playwright test
+        env:
+          BASE_URL: http://localhost:3000
+          
+      - name: رفع تقرير E2E
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: e2e-test-results
+          path: |
+            playwright-report/
+            test-results/
+            
+      - name: رفع لقطات الشاشة عند الفشل
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: e2e-failure-screenshots
+          path: test-results/
+
+  security-audit:
+    name: فحص الأمان
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: استنساخ المستودع
+        uses: actions/checkout@v4
+        
+      - name: إعداد Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: تثبيت dependencies
+        run: npm ci
+        
+      - name: تشغيل فحص الأمان
+        run: npm audit --audit-level moderate
+        
+      - name: فحص الثغرات الأمنية
+        run: npx audit-ci --moderate
+
+  performance-tests:
+    name: اختبارات الأداء
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: استنساخ المستودع
+        uses: actions/checkout@v4
+        
+      - name: إعداد Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: تثبيت dependencies
+        run: npm ci
+        
+      - name: بناء التطبيق
+        run: npm run build
+        env:
+          NODE_ENV: production
+          
+      - name: تشغيل Lighthouse
+        uses: treosh/lighthouse-ci-action@v9
+        with:
+          configPath: './lighthouserc.js'
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+
+  build-and-deploy:
+    name: بناء ونشر التطبيق
+    runs-on: ubuntu-latest
+    needs: [lint-and-type-check, unit-tests, integration-tests, security-audit]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: استنساخ المستودع
+        uses: actions/checkout@v4
+        
+      - name: إعداد Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: تثبيت dependencies
+        run: npm ci
+        
+      - name: بناء التطبيق
+        run: npm run build
+        env:
+          NODE_ENV: production
+          
+      - name: تحليل حجم الحزمة
+        run: npm run build:analyze
+        env:
+          ANALYZE: true
+          
+      - name: رفع ملفات البناء
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-artifacts
+          path: |
+            .next/
+            public/
+            package.json
+            package-lock.json
+            
+      - name: اختبار البناء
+        run: npm run start &
+        env:
+          NODE_ENV: production
+          
+      - name: فحص صحة البناء
+        run: npx wait-on http://localhost:3000 && curl -f http://localhost:3000
+
+  test-coverage-report:
+    name: تقرير تغطية الاختبارات
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    if: always()
+    
+    steps:
+      - name: استنساخ المستودع
+        uses: actions/checkout@v4
+        
+      - name: إعداد Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: تثبيت dependencies
+        run: npm ci
+        
+      - name: تشغيل جميع الاختبارات مع التغطية
+        run: npm run test:ci
+        
+      - name: إنشاء تقرير شامل للتغطية
+        run: |
+          npx jest --coverage --coverageReporters=html,lcov,text-summary
+          
+      - name: نشر تقرير التغطية
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./coverage/lcov-report
+          destination_dir: coverage-report
+          
+      - name: التعليق على Pull Request
+        uses: actions/github-script@v6
+        if: github.event_name == 'pull_request'
+        with:
+          script: |
+            const fs = require('fs');
+            const path = './coverage/coverage-summary.json';
+            
+            if (fs.existsSync(path)) {
+              const coverage = JSON.parse(fs.readFileSync(path, 'utf8'));
+              const total = coverage.total;
+              
+              const comment = `
+              ## تقرير تغطية الاختبارات 📊
+              
+              | النوع | التغطية | التغيير |
+              |-------|---------|---------|
+              | الكود البرمجي | ${total.lines.pct}% | ${total.lines.change > 0 ? '↗️' : '↘️'} ${total.lines.change}% |
+              | الدوال | ${total.functions.pct}% | ${total.functions.change > 0 ? '↗️' : '↘️'} ${total.functions.change}% |
+              | الفروع | ${total.branches.pct}% | ${total.branches.change > 0 ? '↗️' : '↘️'} ${total.branches.change}% |
+              | العبارات | ${total.statements.pct}% | ${total.statements.change > 0 ? '↗️' : '↘️'} ${total.statements.change}% |
+              
+              [📈 عرض التقرير المفصل](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/coverage-report/)
+              `;
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }
+
+  notify-team:
+    name: إشعار الفريق
+    runs-on: ubuntu-latest
+    needs: [lint-and-type-check, unit-tests, integration-tests, e2e-tests, build-and-deploy]
+    if: always()
+    
+    steps:
+      - name: إرسال إشعار Slack
+        uses: 8398a7/action-slack@v3
+        if: always()
+        with:
+          status: ${{ job.status }}
+          channel: '#frontend-team'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+          custom_payload: |
+            {
+              "text": "🎯 نتائج اختبارات Frontend",
+              "attachments": [{
+                "color": "${{ job.status == 'success' && 'good' || 'danger' }}",
+                "fields": [
+                  {
+                    "title": "الوظيفة",
+                    "value": "${{ github.event.head_commit.committer.name }}",
+                    "short": true
+                  },
+                  {
+                    "title": "الفرع",
+                    "value": "${{ github.ref_name }}",
+                    "short": true
+                  },
+                  {
+                    "title": "الحالة",
+                    "value": "${{ job.status }}",
+                    "short": true
+                  }
+                ]
+              }]
+            }

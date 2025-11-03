@@ -6,7 +6,8 @@ const config = {
   // نمط ملفات الاختبار
   testMatch: [
     '<rootDir>/src/**/__tests__/**/*.(js|jsx|ts|tsx)',
-    '<rootDir>/src/**/?(*.)(spec|test).(js|jsx|ts|tsx)'
+    '<rootDir>/src/**/?(*.)(spec|test).(js|jsx|ts|tsx)',
+    '<rootDir>/tests/**/*.(test|spec).(ts|tsx)'
   ],
   
   // إعدادات الملفات
@@ -55,7 +56,7 @@ const config = {
   
   // إعدادات المخصصة
   setupFilesAfterEnv: [
-    '<rootDir>/src/__tests__/setupTests.js',
+    '<rootDir>/jest.setup.ts',
     '@testing-library/jest-dom/extend-expect'
   ],
   

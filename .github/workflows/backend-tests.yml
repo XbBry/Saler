@@ -1,0 +1,329 @@
+name: Backend Tests & Coverage
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.11, 3.12]
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: saler_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      working-directory: ./backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest-xdist  # For parallel testing
+
+    - name: Run database migrations
+      working-directory: ./backend
+      run: |
+        python -c "
+        import asyncio
+        from app.core.database import engine, Base
+        from app.models import *
+        
+        async def create_tables():
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            await engine.dispose()
+        
+        asyncio.run(create_tables())
+        "
+      env:
+        DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/saler_test
+        REDIS_URL: redis://localhost:6379/0
+
+    - name: Run unit tests
+      working-directory: ./backend
+      run: |
+        python -m pytest tests/unit/ \
+          -v \
+          --tb=short \
+          --cov=app \
+          --cov-report=term-missing \
+          --cov-report=xml \
+          -n auto
+      env:
+        DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/saler_test
+        REDIS_URL: redis://localhost:6379/0
+        TESTING: true
+
+    - name: Run integration tests
+      working-directory: ./backend
+      run: |
+        python -m pytest tests/integration/ \
+          -v \
+          --tb=short \
+          --cov=app \
+          --cov-append \
+          --cov-report=term-missing \
+          --cov-report=xml
+      env:
+        DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/saler_test
+        REDIS_URL: redis://localhost:6379/0
+        TESTING: true
+
+    - name: Run API endpoint tests
+      working-directory: ./backend
+      run: |
+        python -m pytest tests/integration/test_api_endpoints.py \
+          -v \
+          --tb=short \
+          --cov=app \
+          --cov-append \
+          --cov-report=term-missing
+      env:
+        DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/saler_test
+        REDIS_URL: redis://localhost:6379/0
+        TESTING: true
+
+    - name: Run security tests
+      working-directory: ./backend
+      run: |
+        python -m pytest tests/security/ \
+          -v \
+          --tb=short
+      env:
+        DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/saler_test
+        REDIS_URL: redis://localhost:6379/0
+        TESTING: true
+
+    - name: Run performance tests
+      working-directory: ./backend
+      run: |
+        python -m pytest tests/performance/ \
+          -v \
+          --tb=short \
+          -m "not slow"
+      env:
+        DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/saler_test
+        REDIS_URL: redis://localhost:6379/0
+        TESTING: true
+
+    - name: Generate coverage report
+      working-directory: ./backend
+      run: |
+        python -m coverage report --show-missing
+        python -m coverage html
+      env:
+        DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/saler_test
+        REDIS_URL: redis://localhost:6379/0
+        TESTING: true
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./backend/coverage.xml
+        flags: backend
+        name: backend-coverage
+
+    - name: Upload coverage HTML report
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-html-report
+        path: ./backend/htmlcov/
+
+    - name: Check coverage threshold
+      working-directory: ./backend
+      run: |
+        COVERAGE=$(python -m coverage report | grep TOTAL | awk '{print $4}' | sed 's/%//')
+        echo "Coverage: $COVERAGE%"
+        if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+          echo "Coverage $COVERAGE% is below threshold of 80%"
+          exit 1
+        else
+          echo "Coverage $COVERAGE% meets the threshold"
+        fi
+
+  code-quality:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
+
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+
+    - name: Install dependencies
+      working-directory: ./backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install black isort flake8 mypy bandit safety
+
+    - name: Run code formatting check (Black)
+      working-directory: ./backend
+      run: |
+        black --check --diff app/ tests/
+
+    - name: Run import sorting check (isort)
+      working-directory: ./backend
+      run: |
+        isort --check-only --diff app/ tests/
+
+    - name: Run linting (flake8)
+      working-directory: ./backend
+      run: |
+        flake8 app/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+
+    - name: Run type checking (mypy)
+      working-directory: ./backend
+      run: |
+        mypy app/ --ignore-missing-imports --no-strict-optional
+
+    - name: Run security linting (bandit)
+      working-directory: ./backend
+      run: |
+        bandit -r app/ -f json -o bandit-report.json || true
+
+    - name: Run dependency vulnerability check (safety)
+      working-directory: ./backend
+      run: |
+        safety check --json --output safety-report.json || true
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-reports
+        path: |
+          ./backend/bandit-report.json
+          ./backend/safety-report.json
+
+  database-migrations:
+    runs-on: ubuntu-latest
+    needs: [backend-tests]
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: saler_migration_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5433:5432
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
+
+    - name: Install dependencies
+      working-directory: ./backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install alembic
+
+    - name: Test database migrations
+      working-directory: ./backend
+      run: |
+        # Test initial migration
+        alembic upgrade head
+        
+        # Test rollback
+        alembic downgrade -1
+        
+        # Test upgrade again
+        alembic upgrade head
+        
+        echo "Migration tests passed!"
+
+      env:
+        DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5433/saler_migration_test
+
+  load-testing:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Start test environment
+      working-directory: ./backend
+      run: |
+        docker-compose up -d
+        sleep 30  # Wait for services to start
+
+    - name: Install k6 for load testing
+      run: |
+        sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+        echo "deb https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+        sudo apt-get update
+        sudo apt-get install k6
+
+    - name: Run load tests
+      working-directory: ./backend
+      run: |
+        k6 run tests/load/k6-test.js
+
+    - name: Stop test environment
+      if: always()
+      working-directory: ./backend
+      run: |
+        docker-compose down -v
