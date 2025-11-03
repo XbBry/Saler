@@ -1,8 +1,17 @@
 /**
- * Sentry Configuration and Integration
- * إعدادات وتكامل Sentry
-
-تكامل متقدم مع Sentry لمراقبة الأخطاء والاستثناءات
+ * نظام المراقبة الشامل - Sentry Configuration and Integration
+ * Comprehensive Monitoring System - Sentry Configuration and Integration
+ * 
+ * تكامل متقدم مع Sentry لمراقبة الأخطاء والأداء والاستثناءات
+ * Advanced Sentry integration for error monitoring, performance tracking, and exception handling
+ * 
+ * يتضمن:
+ * - Error tracking & performance monitoring
+ * - User context tracking & session replays
+ * - Release tracking & health monitoring
+ * - Advanced alerting & notifications
+ * - Integration with backend services
+ * - Real-time analytics & insights
  */
 
 class SentryConfig {
@@ -15,15 +24,22 @@ class SentryConfig {
             enablePerformance: config.enablePerformance !== false,
             enableUserTracking: config.enableUserTracking !== false,
             enableBrowserErrorCapture: config.enableBrowserErrorCapture !== false,
+            enableServerSideTracking: config.enableServerSideTracking !== false,
+            enableReleaseTracking: config.enableReleaseTracking !== false,
+            enableHealthMonitoring: config.enableHealthMonitoring !== false,
+            enableRealTimeAlerts: config.enableRealTimeAlerts !== false,
             beforeSend: config.beforeSend || this.defaultBeforeSend,
             beforeBreadcrumb: config.beforeBreadcrumb || this.defaultBeforeBreadcrumb,
             integrations: config.integrations || [],
             tracesSampleRate: config.tracesSampleRate || 0.1,
             replaysSessionSampleRate: config.replaysSessionSampleRate || 0.1,
             replaysOnErrorSampleRate: config.replaysOnErrorSampleRate || 1.0,
+            // Error filtering
             ignoreErrors: config.ignoreErrors || [
                 'Script error.',
-                'Non-Error promise rejection captured'
+                'Non-Error promise rejection captured',
+                'ResizeObserver loop limit exceeded',
+                'Non-Error promise rejection captured asynchronously'
             ],
             ignoreUrls: config.ignoreUrls || [
                 /graphite\.git/i,
@@ -35,7 +51,9 @@ class SentryConfig {
                 /^moz-extension:\/\//i,
                 /^edge:\/\//i,
                 /localhost/i,
-                /\.local/i
+                /\.local/i,
+                /connect\.facebook\.net/i,
+                /googleadservices\.com/i
             ],
             include: {
                 // تضمين المصادر
@@ -48,12 +66,37 @@ class SentryConfig {
             customTags: config.customTags || {},
             telemetry: {
                 enableNetworkTracking: config.enableNetworkTracking !== false,
-                enableSlowSQLTracking: config.enableSlowSQLTracking !== false
+                enableSlowSQLTracking: config.enableSlowSQLTracking !== false,
+                enableConnectionTracking: config.enableConnectionTracking !== false,
+                enablePerformanceMonitoring: config.enablePerformanceMonitoring !== false
             },
             performance: {
                 enableLongTaskTracking: config.enableLongTaskTracking !== false,
                 enableWebVitals: config.enableWebVitals !== false,
-                enableAssetTracking: config.enableAssetTracking !== false
+                enableAssetTracking: config.enableAssetTracking !== false,
+                enableMemoryTracking: config.enableMemoryTracking !== false,
+                enableCPUTracking: config.enableCPUTracking !== false
+            },
+            alerting: {
+                enableRealTimeAlerts: config.enableRealTimeAlerts !== false,
+                alertThresholds: config.alertThresholds || {
+                    errorRate: 5, // نسبة الخطأ
+                    responseTime: 3000, // ms
+                    memoryUsage: 80, // %
+                    cpuUsage: 70 // %
+                },
+                channels: config.alertChannels || {
+                    email: true,
+                    slack: true,
+                    discord: false,
+                    sms: false
+                }
+            },
+            backend: {
+                endpoint: config.backendEndpoint || process.env.VITE_BACKEND_URL,
+                apiKey: config.apiKey || process.env.VITE_API_KEY,
+                enableHealthChecks: config.enableHealthChecks !== false,
+                enablePerformanceMetrics: config.enablePerformanceMetrics !== false
             },
             debug: config.debug || false,
             logLevel: config.logLevel || 'error'
@@ -68,7 +111,8 @@ class SentryConfig {
     }
     
     /**
-     * تهيئة Sentry
+     * تهيئة Sentry الشاملة
+     * Initialize comprehensive Sentry setup
      */
     init() {
         if (typeof Sentry === 'undefined') {
@@ -77,30 +121,58 @@ class SentryConfig {
         }
         
         try {
-            // تكوين Sentry
+            // تكوين Sentry المتقدم
             Sentry.init({
                 dsn: this.config.dsn,
                 environment: this.config.environment,
                 release: this.config.release,
                 sampleRate: this.config.sampleRate,
-                maxBreadcrumbs: 50,
+                maxBreadcrumbs: 100, // زيادة عدد breadcrumbs
+                maxValueLength: 1000,
+                maxAdditionalBreadcrumbLength: 1000,
                 beforeSend: (event) => this.config.beforeSend(event),
                 beforeBreadcrumb: (breadcrumb) => this.config.beforeBreadcrumb(breadcrumb),
                 tracesSampleRate: this.config.tracesSampleRate,
                 integrations: this.getIntegrations(),
                 ignoreErrors: this.config.ignoreErrors,
                 ignoreUrls: this.config.ignoreUrls,
-                debug: this.config.debug
+                debug: this.config.debug,
+                attachStacktrace: true,
+                showReportDialog: {
+                    showReportDialog: this.config.environment === 'production',
+                    lang: 'ar'
+                }
             });
             
             this.isInitialized = true;
-            console.log('تم تهيئة Sentry بنجاح');
+            console.log('تم تهيئة نظام المراقبة الشامل بنجاح');
             
-            // إعداد المراقبين المخصصين
-            this.setupCustomTracking();
+            // إعداد المراقبين المتقدمين
+            this.setupAdvancedTracking();
+            
+            // إعداد التكامل مع Backend
+            if (this.config.enableServerSideTracking) {
+                this.setupBackendIntegration();
+            }
+            
+            // إعداد تتبع الإصدارات
+            if (this.config.enableReleaseTracking) {
+                this.setupReleaseTracking();
+            }
+            
+            // إعداد المراقبة الصحية
+            if (this.config.enableHealthMonitoring) {
+                this.setupHealthMonitoring();
+            }
+            
+            // إعداد التنبيهات الفورية
+            if (this.config.enableRealTimeAlerts) {
+                this.setupRealTimeAlerts();
+            }
             
         } catch (error) {
-            console.error('خطأ في تهيئة Sentry:', error);
+            console.error('خطأ في تهيئة نظام المراقبة:', error);
+            this.captureException(error, { component: 'SentryConfig.init' });
         }
     }
     
@@ -153,24 +225,215 @@ class SentryConfig {
     }
     
     /**
-     * الإعداد المخصص للتتبع
+     * الإعداد المتقدم للتتبع الشامل
+     * Advanced comprehensive tracking setup
      */
-    setupCustomTracking() {
-        // تتبع التنقل
+    setupAdvancedTracking() {
+        // تتبع التنقل المتقدم
         this.setupNavigationTracking();
         
-        // تتبع التفاعل
+        // تتبع التفاعل المتقدم
         this.setupInteractionTracking();
         
-        // تتبع الأداء
+        // تتبع الأداء المتقدم
         if (this.config.enablePerformance) {
-            this.setupPerformanceTracking();
+            this.setupAdvancedPerformanceTracking();
         }
         
-        // تتبع الشبكة
+        // تتبع الشبكة المتقدم
         if (this.config.telemetry.enableNetworkTracking) {
-            this.setupNetworkTracking();
+            this.setupAdvancedNetworkTracking();
         }
+        
+        // تتبع الذاكرة والمعالج
+        if (this.config.performance.enableMemoryTracking) {
+            this.setupMemoryTracking();
+        }
+        
+        if (this.config.performance.enableCPUTracking) {
+            this.setupCPUTracking();
+        }
+        
+        // تتبع الاتصال
+        if (this.config.telemetry.enableConnectionTracking) {
+            this.setupConnectionTracking();
+        }
+        
+        // تتبع الأخطاء المخصصة
+        this.setupCustomErrorTracking();
+        
+        // تتبع المستخدم المتقدم
+        this.setupAdvancedUserTracking();
+    }
+    
+    /**
+     * إعداد التكامل مع Backend
+     */
+    setupBackendIntegration() {
+        if (!this.config.backend.endpoint || !this.config.backend.apiKey) {
+            console.warn('Backend integration disabled - missing endpoint or API key');
+            return;
+        }
+        
+        // إرسال البيانات إلى Backend
+        this.backendSync = setInterval(() => {
+            this.syncDataWithBackend();
+        }, 30000); // كل 30 ثانية
+        
+        // إرسال الأحداث الحرجة فوراً
+        this.setupCriticalEventForwarding();
+    }
+    
+    /**
+     * إعداد تتبع الإصدارات
+     */
+    setupReleaseTracking() {
+        // تتبع معلومات الإصدار
+        this.setTag('version', this.config.release);
+        this.setTag('build_time', this.getBuildTime());
+        this.setTag('git_commit', this.getGitCommit());
+        
+        // تتبع إصدار المتصفح
+        this.setTag('browser_version', navigator.userAgent);
+        this.setTag('platform', navigator.platform);
+        
+        // تتبع معلومات التوزيع
+        this.setContext('deployment', {
+            environment: this.config.environment,
+            release: this.config.release,
+            timestamp: new Date().toISOString(),
+            git_commit: this.getGitCommit(),
+            build_info: this.getBuildInfo()
+        });
+    }
+    
+    /**
+     * إعداد المراقبة الصحية
+     */
+    setupHealthMonitoring() {
+        // مراقبة دورية للـ health checks
+        this.healthCheckInterval = setInterval(() => {
+            this.performHealthCheck();
+        }, 60000); // كل دقيقة
+        
+        // مراقبة الذاكرة والـ performance
+        if ('performance' in window && 'memory' in performance) {
+            this.setupMemoryMonitoring();
+        }
+        
+        // مراقبة معدل الأخطاء
+        this.setupErrorRateMonitoring();
+    }
+    
+    /**
+     * إعداد التنبيهات الفورية
+     */
+    setupRealTimeAlerts() {
+        this.alertRules = {
+            highErrorRate: { threshold: this.config.alerting.alertThresholds.errorRate, window: 300 },
+            highResponseTime: { threshold: this.config.alerting.alertThresholds.responseTime, window: 60 },
+            highMemoryUsage: { threshold: this.config.alerting.alertThresholds.memoryUsage, window: 120 },
+            highCPUUsage: { threshold: this.config.alerting.alertThresholds.cpuUsage, window: 120 }
+        };
+        
+        // مراقبة مستمرة للتنبيهات
+        this.alertMonitoringInterval = setInterval(() => {
+            this.checkAlertConditions();
+        }, 30000); // كل 30 ثانية
+    }
+    
+    /**
+     * التتبع المتقدم للأداء
+     */
+    setupAdvancedPerformanceTracking() {
+        // تتبع Web Vitals المتقدم
+        if (this.config.performance.enableWebVitals) {
+            this.setupAdvancedWebVitals();
+        }
+        
+        // تتبع الموارد المتقدم
+        if (this.config.performance.enableAssetTracking) {
+            this.setupAdvancedAssetTracking();
+        }
+        
+        // تتبع المهام الطويلة
+        if (this.config.performance.enableLongTaskTracking) {
+            this.setupLongTaskTracking();
+        }
+        
+        // تتبع استخدام الطاقة (للأجهزة المحمولة)
+        this.setupEnergyTracking();
+    }
+    
+    /**
+     * إرسال البيانات إلى Backend
+     */
+    async syncDataWithBackend() {
+        try {
+            const stats = this.getStats();
+            const healthData = this.collectHealthData();
+            
+            const response = await fetch(`${this.config.backend.endpoint}/api/monitoring/sync`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.config.backend.apiKey}`
+                },
+                body: JSON.stringify({
+                    sentry_stats: stats,
+                    health_data: healthData,
+                    timestamp: new Date().toISOString(),
+                    environment: this.config.environment
+                })
+            });
+            
+            if (response.ok) {
+                this.addBreadcrumb({
+                    category: 'backend_sync',
+                    message: 'Successfully synced monitoring data with backend',
+                    level: 'info'
+                });
+            }
+        } catch (error) {
+            console.warn('فشل في مزامنة البيانات مع Backend:', error);
+        }
+    }
+    
+    /**
+     * جمع بيانات المراقبة الصحية
+     */
+    collectHealthData() {
+        const data = {
+            timestamp: new Date().toISOString(),
+            performance: {},
+            memory: {},
+            network: {},
+            errors: {}
+        };
+        
+        // بيانات الأداء
+        if (performance.timing) {
+            const timing = performance.timing;
+            data.performance = {
+                loadTime: timing.loadEventEnd - timing.navigationStart,
+                domReady: timing.domContentLoadedEventEnd - timing.navigationStart,
+                firstByte: timing.responseStart - timing.navigationStart
+            };
+        }
+        
+        // بيانات الذاكرة
+        if (performance.memory) {
+            data.memory = {
+                usedJSHeapSize: performance.memory.usedJSHeapSize,
+                totalJSHeapSize: performance.memory.totalJSHeapSize,
+                jsHeapSizeLimit: performance.memory.jsHeapSizeLimit
+            };
+        }
+        
+        // معدل الأخطاء
+        data.errors = this.getErrorStatistics();
+        
+        return data;
     }
     
     /**
@@ -671,7 +934,7 @@ class SentryConfig {
     }
     
     /**
-     * الحصول على الإحصائيات
+     * الحصول على الإحصائيات الشاملة
      */
     getStats() {
         return {
@@ -679,7 +942,240 @@ class SentryConfig {
             breadcrumbs_count: this.breadcrumbs.length,
             contexts_count: this.context.size,
             config: this.config,
-            breadcrumbs: this.breadcrumbs.slice(-10) // آخر 10 breadcrumbs
+            breadcrumbs: this.breadcrumbs.slice(-10), // آخر 10 breadcrumbs
+            performance_stats: this.getPerformanceStats(),
+            error_stats: this.getErrorStatistics(),
+            health_status: this.getHealthStatus(),
+            user_analytics: this.getUserAnalytics(),
+            uptime: this.getUptimeStats()
+        };
+    }
+    
+    /**
+     * إحصائيات الأداء المتقدمة
+     */
+    getPerformanceStats() {
+        const stats = {
+            page_load: {},
+            resource_timing: {},
+            vitals: {},
+            network: {},
+            memory: {}
+        };
+        
+        // صفحة تحميل
+        if (performance.timing) {
+            const timing = performance.timing;
+            stats.page_load = {
+                dns_lookup: timing.domainLookupEnd - timing.domainLookupStart,
+                tcp_connection: timing.connectEnd - timing.connectStart,
+                server_response: timing.responseEnd - timing.requestStart,
+                dom_processing: timing.domComplete - timing.domLoading,
+                load_complete: timing.loadEventEnd - timing.navigationStart
+            };
+        }
+        
+        // Web Vitals
+        if (this.vitals) {
+            stats.vitals = this.vitals;
+        }
+        
+        // الذاكرة
+        if (performance.memory) {
+            stats.memory = {
+                used_heap_size: performance.memory.usedJSHeapSize,
+                total_heap_size: performance.memory.totalJSHeapSize,
+                heap_size_limit: performance.memory.jsHeapSizeLimit
+            };
+        }
+        
+        return stats;
+    }
+    
+    /**
+     * إحصائيات الأخطاء المتقدمة
+     */
+    getErrorStatistics() {
+        const errorStats = {
+            total_errors: this.errorCount || 0,
+            error_types: {},
+            error_frequency: {},
+            last_errors: this.recentErrors || []
+        };
+        
+        // تصنيف الأخطاء
+        if (this.breadcrumbs) {
+            this.breadcrumbs.forEach(breadcrumb => {
+                if (breadcrumb.category === 'exception' || breadcrumb.level === 'error') {
+                    const errorType = breadcrumb.message || 'Unknown';
+                    errorStats.error_types[errorType] = (errorStats.error_types[errorType] || 0) + 1;
+                }
+            });
+        }
+        
+        return errorStats;
+    }
+    
+    /**
+     * حالة الصحة الحالية
+     */
+    getHealthStatus() {
+        const status = {
+            overall: 'healthy',
+            components: {},
+            issues: [],
+            recommendations: []
+        };
+        
+        // فحص الذاكرة
+        if (performance.memory) {
+            const memoryUsage = (performance.memory.usedJSHeapSize / performance.memory.jsHeapSizeLimit) * 100;
+            if (memoryUsage > this.config.alerting.alertThresholds.memoryUsage) {
+                status.components.memory = 'warning';
+                status.issues.push('High memory usage');
+                status.recommendations.push('Consider optimizing memory usage or garbage collection');
+            } else {
+                status.components.memory = 'healthy';
+            }
+        }
+        
+        // فحص الأداء
+        if (this.vitals) {
+            if (this.vitals.lcp && this.vitals.lcp > 2500) {
+                status.components.performance = 'warning';
+                status.issues.push('Slow Largest Contentful Paint');
+                status.recommendations.push('Optimize largest content element loading');
+            } else {
+                status.components.performance = 'healthy';
+            }
+        }
+        
+        // تحديد الحالة العامة
+        if (status.issues.length > 0) {
+            status.overall = status.issues.some(issue => issue.includes('High memory') || issue.includes('critical')) ? 'critical' : 'warning';
+        }
+        
+        return status;
+    }
+    
+    /**
+     * تحليلات المستخدم المتقدمة
+     */
+    getUserAnalytics() {
+        return {
+            session_duration: this.getSessionDuration(),
+            page_views: this.getPageViewCount(),
+            interactions: this.getInteractionCount(),
+            device_info: this.getDeviceInfo(),
+            geo_location: this.getGeoLocation(),
+            browser_info: this.getBrowserInfo()
+        };
+    }
+    
+    /**
+     * إحصائيات التشغيل
+     */
+    getUptimeStats() {
+        return {
+            start_time: this.startTime,
+            current_time: Date.now(),
+            uptime_ms: Date.now() - this.startTime,
+            health_checks: this.healthCheckResults || [],
+            last_error: this.lastError || null
+        };
+    }
+    
+    /**
+     * مساعدة: الحصول على مدة الجلسة
+     */
+    getSessionDuration() {
+        if (!this.sessionStartTime) return 0;
+        return Date.now() - this.sessionStartTime;
+    }
+    
+    /**
+     * مساعدة: الحصول على عدد مشاهدة الصفحات
+     */
+    getPageViewCount() {
+        return this.pageViewCount || 0;
+    }
+    
+    /**
+     * مساعدة: الحصول على معلومات الجهاز
+     */
+    getDeviceInfo() {
+        return {
+            user_agent: navigator.userAgent,
+            platform: navigator.platform,
+            language: navigator.language,
+            cookie_enabled: navigator.cookieEnabled,
+            on_line: navigator.onLine,
+            screen_resolution: `${screen.width}x${screen.height}`,
+            viewport: `${window.innerWidth}x${window.innerHeight}`
+        };
+    }
+    
+    /**
+     * مساعدة: الحصول على معلومات المتصفح
+     */
+    getBrowserInfo() {
+        const ua = navigator.userAgent;
+        let browser = 'Unknown';
+        let version = 'Unknown';
+        
+        if (ua.includes('Chrome')) {
+            browser = 'Chrome';
+            version = ua.match(/Chrome\/(\d+)/)?.[1];
+        } else if (ua.includes('Firefox')) {
+            browser = 'Firefox';
+            version = ua.match(/Firefox\/(\d+)/)?.[1];
+        } else if (ua.includes('Safari') && !ua.includes('Chrome')) {
+            browser = 'Safari';
+            version = ua.match(/Version\/(\d+)/)?.[1];
+        } else if (ua.includes('Edge')) {
+            browser = 'Edge';
+            version = ua.match(/Edge\/(\d+)/)?.[1];
+        }
+        
+        return { browser, version, user_agent: ua };
+    }
+    
+    /**
+     * المساعدة: الحصول على معلومات Git
+     */
+    getGitCommit() {
+        // محاولة الحصول على معلومات Git من meta tags أو global variables
+        const metaTag = document.querySelector('meta[name="git-commit"]');
+        if (metaTag) return metaTag.content;
+        
+        if (window.GIT_COMMIT) return window.GIT_COMMIT;
+        
+        return 'unknown';
+    }
+    
+    /**
+     * المساعدة: الحصول على وقت البناء
+     */
+    getBuildTime() {
+        const metaTag = document.querySelector('meta[name="build-time"]');
+        if (metaTag) return metaTag.content;
+        
+        if (window.BUILD_TIME) return window.BUILD_TIME;
+        
+        return new Date().toISOString();
+    }
+    
+    /**
+     * المساعدة: الحصول على معلومات البناء
+     */
+    getBuildInfo() {
+        return {
+            version: this.config.release,
+            environment: this.config.environment,
+            build_time: this.getBuildTime(),
+            git_commit: this.getGitCommit(),
+            node_version: process?.version || 'unknown',
+            build_number: window.BUILD_NUMBER || 'unknown'
         };
     }
     

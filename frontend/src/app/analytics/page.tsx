@@ -108,6 +108,11 @@ import {
   MetricCard as ChartMetricCard,
 } from '../../components/charts';
 import { useEnhancedAnalytics } from '../../hooks/use-enhanced-analytics';
+import { useAdvancedAnalytics } from '../../hooks/useAdvancedAnalytics';
+import AdvancedDashboard from '../../components/analytics/AdvancedDashboard';
+import AdvancedKPICard from '../../components/analytics/AdvancedKPICard';
+import AdvancedChart from '../../components/analytics/AdvancedChart';
+import AdvancedConversionFunnel from '../../components/analytics/AdvancedConversionFunnel';
 
 // ==================== ENHANCED TYPES ====================
 

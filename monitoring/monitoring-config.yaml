@@ -1,0 +1,625 @@
+# ملف الإعدادات الرئيسي لنظام المراقبة الشامل
+# Main Configuration File for Comprehensive Monitoring System
+
+# إعدادات Sentry
+sentry:
+  enabled: true
+  dsn: "${SENTRY_DSN}"
+  environment: "${NODE_ENV:production}"
+  release: "${APP_VERSION:1.0.0}"
+  traces_sample_rate: 0.1
+  replays_session_sample_rate: 0.1
+  replays_on_error_sample_rate: 1.0
+  enable_performance: true
+  enable_user_tracking: true
+  enable_browser_error_capture: true
+  enable_server_side_tracking: true
+  enable_release_tracking: true
+  enable_health_monitoring: true
+  enable_real_time_alerts: true
+  
+  alerting:
+    enable_real_time_alerts: true
+    alert_thresholds:
+      error_rate: 5      # percentage
+      response_time: 3000  # milliseconds
+      memory_usage: 80     # percentage
+      cpu_usage: 70        # percentage
+    channels:
+      email: true
+      slack: true
+      discord: false
+      sms: false
+  
+  backend:
+    endpoint: "${BACKEND_URL:http://localhost:8000}"
+    api_key: "${MONITORING_API_KEY}"
+    enable_health_checks: true
+    enable_performance_metrics: true
+
+# إعدادات نظام السجلات المتقدم
+logging:
+  enabled: true
+  level: "info"  # debug, info, warn, error, critical
+  enable_console: true
+  enable_file: true
+  enable_remote: false
+  enable_database: true
+  enable_alerts: true
+  
+  storage:
+    max_file_size: 10485760  # 10MB
+    max_files: 30
+    rotate_interval: "daily"  # daily, weekly, monthly
+    compression: true
+    archive_path: "./logs/archive/"
+    
+    # إعدادات قاعدة البيانات
+    db_connection: "${LOGS_DB_CONNECTION:postgresql://localhost:5432/saler}"
+    table_name: "application_logs"
+    
+    # إعدادات الخادم البعيد
+    remote_endpoint: "${LOGS_REMOTE_ENDPOINT}"
+    api_key: "${LOGS_API_KEY}"
+    batch_size: 100
+    flush_interval: 30000  # 30 seconds
+  
+  format:
+    timestamp: "ISO"
+    timezone: "UTC"
+    include_stack: true
+    include_context: true
+    custom_fields:
+      application: "saler"
+      version: "${APP_VERSION}"
+    json_indent: 0
+    colorize_console: true
+  
+  alerts:
+    enabled: true
+    channels:
+      email: true
+      slack: false
+      discord: false
+      webhook: false
+    thresholds:
+      error_rate: 10      # errors per minute
+      critical_errors: 5
+      response_time: 5000  # milliseconds
+      memory_usage: 80     # percentage
+    recipients:
+      - "alerts@saler.com"
+      - "ops@saler.com"
+
+# إعدادات فحوصات الصحة
+health_checks:
+  enabled: true
+  system:
+    enabled: true
+    interval: 30  # seconds
+    thresholds:
+      cpu_usage: 80
+      memory_usage: 85
+      disk_usage: 90
+      network_io: 100000000  # bytes/second
+  
+  database:
+    enabled: true
+    interval: 60
+    connections:
+      primary:
+        connection_string: "${DATABASE_URL:postgresql://localhost:5432/saler}"
+        query: "SELECT 1"
+        timeout: 10
+      replica:
+        connection_string: "${DATABASE_REPLICA_URL:postgresql://localhost:5433/saler}"
+        query: "SELECT 1"
+        timeout: 10
+  
+  redis:
+    enabled: true
+    interval: 30
+    connections:
+      cache:
+        url: "${REDIS_URL:redis://localhost:6379}"
+        timeout: 5
+      session:
+        url: "${REDIS_SESSION_URL:redis://localhost:6380}"
+        timeout: 5
+  
+  external_services:
+    enabled: true
+    interval: 120
+    services:
+      api_gateway:
+        url: "${API_GATEWAY_URL:https://api.saler.com/health}"
+        timeout: 10
+        expected_status: 200
+      payment_gateway:
+        url: "${PAYMENT_GATEWAY_URL:https://payments.saler.com/status}"
+        timeout: 10
+        expected_status: 200
+      email_service:
+        url: "${EMAIL_SERVICE_URL:https://email.saler.com/status}"
+        timeout: 5
+        expected_status: 200
+
+# إعدادات مراقبة الأداء
+performance_monitoring:
+  enabled: true
+  analyzer:
+    analysis_interval: 30  # seconds
+    prediction_window: 3600  # 1 hour
+  
+  collector:
+    data_sources:
+      application:
+        enabled: true
+        endpoints:
+          - "/health"
+          - "/metrics"
+          - "/status"
+      system:
+        enabled: true
+        metrics:
+          - "cpu"
+          - "memory"
+          - "disk"
+          - "network"
+      database:
+        enabled: true
+        connections:
+          - "${DATABASE_URL}"
+      cache:
+        enabled: true
+        redis_url: "${REDIS_URL}"
+  
+  alerts:
+    enabled: true
+    channels: ["email", "slack"]
+    thresholds:
+      response_time: 5.0    # seconds
+      error_rate: 5.0        # percentage
+      cpu_usage: 80.0        # percentage
+      memory_usage: 85.0     # percentage
+  
+  optimization:
+    auto_optimization: false
+    recommendations_enabled: true
+    machine_learning:
+      anomaly_detection: true
+      trend_prediction: true
+
+# إعدادات نظام التنبيهات
+alerting:
+  enabled: true
+  channels:
+    email:
+      enabled: true
+      smtp_server: "${SMTP_SERVER:smtp.gmail.com}"
+      smtp_port: 587
+      username: "${SMTP_USERNAME}"
+      password: "${SMTP_PASSWORD}"
+      from_email: "${ALERT_FROM_EMAIL:alerts@saler.com}"
+      to_emails: "${ALERT_TO_EMAILS}"
+    slack:
+      enabled: true
+      webhook_url: "${SLACK_WEBHOOK_URL}"
+      bot_token: "${SLACK_BOT_TOKEN}"
+      channel: "${SLACK_CHANNEL:#alerts}"
+    discord:
+      enabled: false
+      webhook_url: "${DISCORD_WEBHOOK_URL}"
+    telegram:
+      enabled: true
+      bot_token: "${TELEGRAM_BOT_TOKEN}"
+      chat_ids: "${TELEGRAM_CHAT_IDS}"
+    webhook:
+      enabled: true
+      webhook_urls:
+        - "${WEBHOOK_URL_1}"
+        - "${WEBHOOK_URL_2}"
+    push:
+      enabled: false
+      server_key: "${FCM_SERVER_KEY}"
+      app_id: "${PUSH_APP_ID}"
+  
+  escalation_policies:
+    standard:
+      name: "standard"
+      severity_levels:
+        - "critical"
+        - "high"
+        - "medium"
+        - "low"
+      time_thresholds:
+        critical: 300      # 5 minutes
+        high: 900          # 15 minutes
+        medium: 1800       # 30 minutes
+        low: 3600          # 1 hour
+      notification_channels:
+        0: ["email"]
+        1: ["slack", "email"]
+        2: ["discord", "sms"]
+        3: ["telegram", "webhook"]
+        4: ["push", "sms"]
+      escalation_rules:
+        1: "notify_next_level"
+        2: "escalate_manager"
+        3: "call_onduty"
+        4: "paging_system"
+      max_escalation_level: 4
+      auto_resolve_after: 86400  # 24 hours
+  
+  suppression:
+    enabled: true
+    rules:
+      maintenance_window:
+        start_time: "02:00"
+        end_time: "04:00"
+        time_based: true
+        categories:
+          - "maintenance"
+          - "deployment"
+      business_hours:
+        start_time: "09:00"
+        end_time: "18:00"
+        time_based: true
+        severities:
+          - "low"
+          - "medium"
+
+# إعدادات مراقبة البنية التحتية
+infrastructure:
+  enabled: true
+  kubernetes:
+    enabled: true
+    namespace: "saler"
+    metrics_interval: 30
+    alerts:
+      pod_restart_threshold: 3
+      node_not_ready_timeout: 300
+  
+  docker:
+    enabled: true
+    host: "${DOCKER_HOST:unix:///var/run/docker.sock}"
+    alerts:
+      container_down_timeout: 60
+  
+  network:
+    enabled: true
+    ping_targets:
+      - "8.8.8.8"
+      - "1.1.1.1"
+      - "api.saler.com"
+    bandwidth_threshold: 100000000  # 100MB/s
+  
+  ssl:
+    enabled: true
+    certificate_check_interval: 3600
+    expiry_warning_days: 30
+
+# إعدادات المقاييس والتصدير
+metrics:
+  enabled: true
+  prometheus:
+    enabled: true
+    port: 8001
+    path: "/metrics"
+    metrics_whitelist:
+      - "app_*"
+      - "system_*"
+      - "database_*"
+      - "cache_*"
+  
+  grafana:
+    enabled: true
+    url: "${GRAFANA_URL:http://localhost:3000}"
+    api_key: "${GRAFANA_API_KEY}"
+    dashboards:
+      - "system-overview"
+      - "application-performance"
+      - "business-metrics"
+  
+  elasticsearch:
+    enabled: false
+    host: "${ELASTICSEARCH_HOST:localhost:9200}"
+    index_pattern: "monitoring-*"
+  
+  influxdb:
+    enabled: false
+    host: "${INFLUXDB_HOST:localhost:8086}"
+    database: "monitoring"
+
+# إعدادات الأمان
+security:
+  enabled: true
+  intrusion_detection:
+    enabled: true
+    failed_login_threshold: 10
+    suspicious_ip_threshold: 100
+    port_scan_threshold: 50
+  
+  audit_logging:
+    enabled: true
+    log_level: "info"
+    sensitive_actions:
+      - "login"
+      - "logout"
+      - "password_change"
+      - "user_creation"
+      - "permission_change"
+  
+  vulnerability_scanning:
+    enabled: true
+    scan_interval: 86400  # daily
+    severity_threshold: "medium"
+
+# إعدادات التقارير والتحليلات
+reporting:
+  enabled: true
+  daily_reports:
+    enabled: true
+    time: "08:00"
+    recipients:
+      - "management@saler.com"
+      - "tech-lead@saler.com"
+  
+  weekly_reports:
+    enabled: true
+    day: "monday"
+    time: "09:00"
+    recipients:
+      - "management@saler.com"
+      - "ops-team@saler.com"
+  
+  monthly_reports:
+    enabled: true
+    day: 1
+    time: "10:00"
+    recipients:
+      - "management@saler.com"
+  
+  analytics:
+    trend_analysis: true
+    anomaly_detection: true
+    predictive_alerts: true
+    performance_optimization: true
+
+# إعدادات التكامل مع الخدمات الخارجية
+integrations:
+  datadog:
+    enabled: false
+    api_key: "${DATADOG_API_KEY}"
+    app_key: "${DATADOG_APP_KEY}"
+  
+  newrelic:
+    enabled: false
+    license_key: "${NEWRELIC_LICENSE_KEY}"
+  
+  pagerduty:
+    enabled: false
+    integration_key: "${PAGERDUTY_KEY}"
+  
+  opsgenie:
+    enabled: false
+    api_key: "${OPSGENIE_API_KEY}"
+
+# إعدادات التطوير والاختبار
+development:
+  enabled: "${NODE_ENV:production}" != "production"
+  mock_data: false
+  debug_logging: true
+  performance_profiling: false
+  
+  testing:
+    alert_testing: true
+    load_testing: false
+    chaos_engineering: false
+
+# إعدادات النسخ الاحتياطي والاستعادة
+backup:
+  enabled: true
+  schedule: "0 2 * * *"  # daily at 2 AM
+  retention_days: 30
+  storage:
+    type: "s3"  # s3, gcs, azure
+    bucket: "${BACKUP_BUCKET:saler-backups}"
+    region: "${BACKUP_REGION:us-east-1}"
+
+# إعدادات الإشعارات المحمولة
+mobile:
+  enabled: true
+  push_notifications:
+    firebase:
+      enabled: true
+      server_key: "${FCM_SERVER_KEY}"
+    apns:
+      enabled: false
+      certificate_path: "${APNS_CERT_PATH}"
+  
+  sms:
+    enabled: false
+    provider: "twilio"  # twilio, aws-sns
+    from_number: "${SMS_FROM_NUMBER}"
+    account_sid: "${TWILIO_ACCOUNT_SID}"
+    auth_token: "${TWILIO_AUTH_TOKEN}"
+
+# إعدادات الذكاء الاصطناعي والتحليل التنبؤي
+ai_analytics:
+  enabled: true
+  anomaly_detection:
+    enabled: true
+    model: "isolation_forest"
+    sensitivity: 0.1
+  
+  trend_prediction:
+    enabled: true
+    horizon: 3600  # 1 hour
+    confidence_threshold: 0.8
+  
+  root_cause_analysis:
+    enabled: true
+    correlation_threshold: 0.7
+  
+  auto_remediation:
+    enabled: false
+    actions:
+      - "restart_service"
+      - "clear_cache"
+      - "scale_up"
+      - "notify_team"
+
+# إعدادات الأداء والتحسين
+performance:
+  concurrent_processing: true
+  worker_threads: 4
+  batch_processing:
+    enabled: true
+    batch_size: 1000
+    flush_interval: 10
+  
+  caching:
+    redis_cache:
+      enabled: true
+      ttl: 3600
+      key_prefix: "monitoring:"
+  
+  compression:
+    enabled: true
+    algorithm: "gzip"
+    level: 6
+
+# إعدادات قاعدة البيانات
+database:
+  alerts_db:
+    path: "alerts.db"
+    connection_pool_size: 10
+  monitoring_db:
+    connection_string: "${MONITORING_DB_URL:postgresql://localhost:5433/saler_monitoring}"
+    pool_size: 20
+    max_overflow: 30
+
+# إعدادات Redis
+redis:
+  connection:
+    host: "${REDIS_HOST:localhost}"
+    port: "${REDIS_PORT:6379}"
+    password: "${REDIS_PASSWORD}"
+    db: 0
+  monitoring:
+    connection:
+      host: "${REDIS_MONITORING_HOST:localhost}"
+      port: "${REDIS_MONITORING_PORT:6379}"
+      db: 1
+  alerts:
+    connection:
+      host: "${REDIS_ALERTS_HOST:localhost}"
+      port: "${REDIS_ALERTS_PORT:6379}"
+      db: 2
+
+# إعدادات المراقبة السحابية
+cloud_monitoring:
+  enabled: false
+  aws:
+    enabled: false
+    region: "${AWS_REGION:us-east-1}"
+    cloudwatch:
+      enabled: false
+  gcp:
+    enabled: false
+    project_id: "${GCP_PROJECT_ID}"
+    monitoring:
+      enabled: false
+  azure:
+    enabled: false
+    subscription_id: "${AZURE_SUBSCRIPTION_ID}"
+    monitoring:
+      enabled: false
+
+# إعدادات الـ UI والداشبورد
+ui:
+  enabled: true
+  dashboard:
+    auto_refresh_interval: 30
+    max_data_points: 1000
+    theme: "dark"  # light, dark
+  alerts:
+    max_display: 50
+    hide_resolved_after: 86400  # 24 hours
+
+# إعدادات المراقبة المتقدمة
+advanced_features:
+  distributed_tracing:
+    enabled: true
+    jaeger:
+      enabled: false
+      endpoint: "${JAEGER_ENDPOINT}"
+    zipkin:
+      enabled: false
+      endpoint: "${ZIPKIN_ENDPOINT}"
+  
+  log_aggregation:
+    enabled: true
+    fluentd:
+      enabled: false
+      endpoint: "${FLUENTD_ENDPOINT}"
+    logstash:
+      enabled: false
+      endpoint: "${LOGSTASH_ENDPOINT}"
+  
+  event_streaming:
+    enabled: false
+    kafka:
+      enabled: false
+      brokers: "${KAFKA_BROKERS}"
+    pulsar:
+      enabled: false
+      service_url: "${PULSAR_SERVICE_URL}"
+
+# متغيرات البيئة
+environment:
+  NODE_ENV: "production"
+  APP_VERSION: "1.0.0"
+  BACKEND_URL: "http://localhost:8000"
+  API_GATEWAY_URL: "https://api.saler.com"
+  DATABASE_URL: "postgresql://localhost:5432/saler"
+  DATABASE_REPLICA_URL: "postgresql://localhost:5433/saler"
+  REDIS_URL: "redis://localhost:6379"
+  
+  # Sentry
+  SENTRY_DSN: ""
+  
+  # Email
+  SMTP_SERVER: "smtp.gmail.com"
+  SMTP_USERNAME: ""
+  SMTP_PASSWORD: ""
+  ALERT_FROM_EMAIL: "alerts@saler.com"
+  ALERT_TO_EMAILS: "admin@saler.com,ops@saler.com"
+  
+  # Slack
+  SLACK_WEBHOOK_URL: ""
+  SLACK_BOT_TOKEN: ""
+  SLACK_CHANNEL: "#alerts"
+  
+  # Discord
+  DISCORD_WEBHOOK_URL: ""
+  
+  # Telegram
+  TELEGRAM_BOT_TOKEN: ""
+  TELEGRAM_CHAT_IDS: ""
+  
+  # Push Notifications
+  FCM_SERVER_KEY: ""
+  
+  # Monitoring
+  MONITORING_API_KEY: ""
+  GRAFANA_URL: "http://localhost:3000"
+  GRAFANA_API_KEY: ""
+  
+  # Security
+  API_KEY: ""
+  
+  # Backup
+  BACKUP_BUCKET: "saler-backups"
+  BACKUP_REGION: "us-east-1"

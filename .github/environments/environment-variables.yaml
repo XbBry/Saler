@@ -1,0 +1,257 @@
+# GitHub Environments - متغيرات البيئة
+# Configuration template for all environments
+
+# ==================== DATABASE CONFIGURATION ====================
+databases:
+  dev:
+    name: "saler_dev"
+    url_env_var: "DEV_DATABASE_URL"
+    backup: true
+    migrations: true
+    
+  staging:
+    name: "saler_staging"
+    url_env_var: "STAGING_DATABASE_URL"
+    backup: true
+    replicas: 1
+    migrations: true
+    
+  prod:
+    name: "saler_prod"
+    url_env_var: "PROD_DATABASE_URL"
+    backup: true
+    replicas: 2
+    migrations: true
+    encryption: true
+
+# ==================== REDIS CONFIGURATION ====================
+redis:
+  dev:
+    url_env_var: "DEV_REDIS_URL"
+    maxmemory_policy: "allkeys-lru"
+    
+  staging:
+    url_env_var: "STAGING_REDIS_URL"
+    maxmemory_policy: "allkeys-lru"
+    
+  prod:
+    url_env_var: "PROD_REDIS_URL"
+    maxmemory_policy: "allkeys-lru"
+    cluster_mode: true
+
+# ==================== SERVICE URLs ====================
+services:
+  backend:
+    dev:
+      url_env_var: "DEV_BACKEND_SERVICE_URL"
+      health_check: "/health"
+      
+    staging:
+      url_env_var: "STAGING_BACKEND_SERVICE_URL"
+      health_check: "/health"
+      
+    prod:
+      url_env_var: "PROD_BACKEND_SERVICE_URL"
+      health_check: "/health"
+      
+  frontend:
+    dev:
+      url_env_var: "DEV_FRONTEND_SERVICE_URL"
+      
+    staging:
+      url_env_var: "STAGING_FRONTEND_SERVICE_URL"
+      
+    prod:
+      url_env_var: "PROD_FRONTEND_SERVICE_URL"
+
+# ==================== KUBERNETES CONFIGURATION ====================
+kubernetes:
+  namespaces:
+    dev: "saler-dev"
+    staging: "saler-staging"
+    prod: "saler-prod"
+    
+  kubeconfig:
+    env_var: "KUBECONFIG_DATA"
+    encoding: "base64"
+
+# ==================== MONITORING & OBSERVABILITY ====================
+monitoring:
+  prometheus:
+    enabled: true
+    retention: "30d"
+    
+  grafana:
+    enabled: true
+    dashboards:
+      - "application-performance"
+      - "security-metrics"
+      - "user-analytics"
+      
+  jaeger:
+    enabled: true
+    retention: "7d"
+    
+  elasticsearch:
+    enabled: true
+    retention: "30d"
+
+# ==================== SECURITY CONFIGURATION ====================
+security:
+  ssl:
+    enabled: true
+    cert_manager: true
+    
+  secrets_management:
+    provider: "github-secrets"
+    rotation: "90d"
+    
+  jwt:
+    secret_env_var: "JWT_SECRET_KEY"
+    algorithm: "HS256"
+    expiration: "24h"
+    
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 100
+
+# ==================== EXTERNAL INTEGRATIONS ====================
+integrations:
+  stripe:
+    staging_key_env_var: "STRIPE_TEST_SECRET_KEY"
+    prod_key_env_var: "STRIPE_LIVE_SECRET_KEY"
+    
+  openai:
+    api_key_env_var: "OPENAI_API_KEY"
+    
+  sendgrid:
+    api_key_env_var: "SENDGRID_API_KEY"
+    from_email_env_var: "FROM_EMAIL"
+    
+  twilio:
+    account_sid_env_var: "TWILIO_ACCOUNT_SID"
+    auth_token_env_var: "TWILIO_AUTH_TOKEN"
+
+# ==================== NOTIFICATION CONFIGURATION ====================
+notifications:
+  slack:
+    webhook_env_var: "SLACK_WEBHOOK_URL"
+    channels:
+      deployments: "#deployments"
+      security: "#security"
+      performance: "#performance"
+      
+  email:
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    username_env_var: "EMAIL_USERNAME"
+    password_env_var: "EMAIL_PASSWORD"
+    notification_email_env_var: "NOTIFICATION_EMAIL"
+
+# ==================== PERFORMANCE CONFIGURATION ====================
+performance:
+  lighthouse:
+    threshold_score: 80
+    categories:
+      - "performance"
+      - "accessibility"
+      - "best-practices"
+      - "seo"
+      
+  load_testing:
+    enabled: true
+    tool: "k6"
+    thresholds:
+      response_time_p95: "500ms"
+      error_rate: "5%"
+      
+  caching:
+    redis_enabled: true
+    cache_ttl: 3600
+    cache_keys:
+      - "user_session"
+      - "dashboard_data"
+      - "analytics_cache"
+
+# ==================== BACKUP & RECOVERY ====================
+backup:
+  database:
+    enabled: true
+    schedule: "0 2 * * *"  # Daily at 2 AM
+    retention: "30d"
+    encryption: true
+    
+  files:
+    enabled: true
+    schedule: "0 3 * * *"  # Daily at 3 AM
+    retention: "7d"
+    
+  disaster_recovery:
+    enabled: true
+    rto: "4h"  # Recovery Time Objective
+    rpo: "1h"  # Recovery Point Objective
+
+# ==================== SCALING CONFIGURATION ====================
+scaling:
+  horizontal:
+    enabled: true
+    min_replicas: 2
+    max_replicas: 10
+    target_cpu_utilization: 70
+    
+  vertical:
+    enabled: true
+    min_cpu: "100m"
+    max_cpu: "2000m"
+    min_memory: "128Mi"
+    max_memory: "4Gi"
+
+# ==================== COST OPTIMIZATION ====================
+cost_optimization:
+  auto_shutdown:
+    dev_enabled: true
+    schedule: "0 22 * * *"  # Shutdown at 10 PM
+    startup: "0 8 * * *"    # Startup at 8 AM
+    
+  resource_limits:
+    dev_cpu_limit: "500m"
+    dev_memory_limit: "1Gi"
+    staging_cpu_limit: "1000m"
+    staging_memory_limit: "2Gi"
+    prod_cpu_limit: "2000m"
+    prod_memory_limit: "4Gi"
+
+# ==================== COMPLIANCE & AUDIT ====================
+compliance:
+  logging:
+    enabled: true
+    level: "INFO"
+    structured: true
+    retention: "90d"
+    
+  audit:
+    enabled: true
+    events:
+      - "user_login"
+      - "data_access"
+      - "configuration_changes"
+      - "deployment_events"
+      
+  gdpr:
+    enabled: true
+    data_retention: "2y"
+    right_to_erasure: true
+    
+# ==================== FEATURE FLAGS ====================
+feature_flags:
+  new_dashboard:
+    enabled: false
+    rollout_percentage: 0
+    
+  ai_features:
+    enabled: true
+    rollout_percentage: 100
+    
+  advanced_analytics:
+    enabled: true
+    rollout_percentage: 50

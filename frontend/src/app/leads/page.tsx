@@ -36,6 +36,27 @@ import {
   X,
   ChevronDown,
   ChevronRight,
+  FileSpreadsheet,
+  BrainCircuit,
+  UserCheck,
+  GitBranch,
+  Activity,
+  Bot,
+  Shuffle,
+  UploadCloud,
+  CheckCircle,
+  AlertCircle,
+  ArrowRight,
+  Workflow,
+  Timer,
+  ArrowUpRight,
+  Database,
+  FileText,
+  Sparkles,
+  Move,
+  Grid3X3,
+  List,
+  Table,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
@@ -185,6 +206,26 @@ export default function LeadsPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [showLeadDetails, setShowLeadDetails] = useState(false);
+  
+  // New features state
+  const [activeTab, setActiveTab] = useState<'overview' | 'csv' | 'scoring' | 'assignment' | 'pipeline' | 'activities'>('overview');
+  const [showCsvDialog, setShowCsvDialog] = useState(false);
+  const [csvProgress, setCsvProgress] = useState<number>(0);
+  const [csvStatus, setCsvStatus] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'error'>('idle');
+  const [showScoringDashboard, setShowScoringDashboard] = useState(false);
+  const [showAssignmentDialog, setShowAssignmentDialog] = useState(false);
+  const [showPipelineManager, setShowPipelineManager] = useState(false);
+  const [pipelineStages, setPipelineStages] = useState([
+    { id: '1', name: 'جديد', order: 1, color: '#3B82F6', leads: [mockLeads[2]] },
+    { id: '2', name: 'تم التواصل', order: 2, color: '#F59E0B', leads: [] },
+    { id: '3', name: 'مؤهل', order: 3, color: '#8B5CF6', leads: [mockLeads[0]] },
+    { id: '4', name: 'عرض سعر', order: 4, color: '#10B981', leads: [mockLeads[1]] },
+    { id: '5', name: 'تفاوض', order: 5, color: '#F97316', leads: [mockLeads[3]] },
+  ]);
+  const [draggedStage, setDraggedStage] = useState<string | null>(null);
+  const [assignmentMode, setAssignmentMode] = useState<'auto' | 'manual'>('auto');
+  const [selectedAssignmentRule, setSelectedAssignmentRule] = useState<string>('');
+  const [csvFile, setCsvFile] = useState<File | null>(null);
 
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
@@ -311,6 +352,126 @@ export default function LeadsPage() {
     setShowLeadDetails(true);
   };
 
+  // New features functions
+  const handleCsvUpload = async () => {
+    if (!csvFile) return;
+    
+    setCsvStatus('uploading');
+    setCsvProgress(0);
+    
+    // Simulate upload progress
+    const progressInterval = setInterval(() => {
+      setCsvProgress(prev => {
+        if (prev >= 90) {
+          clearInterval(progressInterval);
+          setCsvStatus('processing');
+          return prev;
+        }
+        return prev + 10;
+      });
+    }, 200);
+    
+    // Simulate processing
+    setTimeout(() => {
+      clearInterval(progressInterval);
+      setCsvProgress(100);
+      setCsvStatus('completed');
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      toast({
+        title: 'تم الاستيراد بنجاح',
+        description: 'تم استيراد البيانات بنجاح',
+      });
+    }, 3000);
+  };
+
+  const handleCsvExport = () => {
+    // Simulate CSV export
+    const csvContent = "data:text/csv;charset=utf-8," + 
+      "الاسم,البريد الإلكتروني,الشركة,الحالة,النقاط\n" +
+      leads.map(lead => `${lead.firstName} ${lead.lastName},${lead.email},${lead.company},${lead.status},${lead.score}`).join("\n");
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "leads_export.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({
+      title: 'تم التصدير',
+      description: 'تم تصدير البيانات بنجاح',
+    });
+  };
+
+  const handleRecalculateScores = async () => {
+    toast({
+      title: 'جاري إعادة حساب النقاط',
+      description: 'يتم تحديث نقاط العملاء بالذكاء الاصطناعي',
+    });
+    
+    // Simulate score recalculation
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      toast({
+        title: 'تم التحديث',
+        description: 'تم تحديث النقاط بنجاح',
+      });
+    }, 2000);
+  };
+
+  const handleAutoAssignment = async (rule: string) => {
+    toast({
+      title: 'جاري التوزيع التلقائي',
+      description: 'يتم توزيع العملاء تلقائياً',
+    });
+    
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      toast({
+        title: 'تم التوزيع',
+        description: 'تم توزيع العملاء بنجاح',
+      });
+    }, 1500);
+  };
+
+  const handleMoveLeadToStage = (leadId: string, stageId: string) => {
+    // Move lead between pipeline stages
+    const updatedStages = pipelineStages.map(stage => ({
+      ...stage,
+      leads: stage.id === stageId 
+        ? [...stage.leads, leads.find(l => l.id === leadId)!].filter(Boolean)
+        : stage.leads.filter(l => l.id !== leadId)
+    }));
+    
+    setPipelineStages(updatedStages);
+    
+    toast({
+      title: 'تم النقل',
+      description: 'تم نقل العميل للمرحلة الجديدة',
+    });
+  };
+
+  const handleDragStart = (stageId: string) => {
+    setDraggedStage(stageId);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (targetStageId: string) => {
+    if (draggedStage && draggedStage !== targetStageId) {
+      // Get leads from dragged stage
+      const draggedStageData = pipelineStages.find(s => s.id === draggedStage);
+      if (draggedStageData && draggedStageData.leads.length > 0) {
+        const leadToMove = draggedStageData.leads[0]; // Move first lead for demo
+        handleMoveLeadToStage(leadToMove.id, targetStageId);
+      }
+    }
+    setDraggedStage(null);
+  };
+
   const getStatusColor = (status: string) => {
     const colors = {
       new: 'bg-blue-100 text-blue-800',
@@ -357,6 +518,19 @@ export default function LeadsPage() {
         return 'بارد';
       default:
         return temperature;
+    }
+  };
+
+  const getTemperatureColor = (temperature: string) => {
+    switch (temperature) {
+      case 'hot':
+        return 'bg-red-100 text-red-800';
+      case 'warm':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'cold':
+        return 'bg-blue-100 text-blue-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -445,9 +619,14 @@ export default function LeadsPage() {
                 تحديث
               </Button>
               
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" onClick={handleCsvExport}>
                 <Download className="h-4 w-4 ml-2" />
-                تصدير
+                تصدير CSV
+              </Button>
+              
+              <Button variant="outline" size="sm" onClick={() => setShowCsvDialog(true)}>
+                <Upload className="h-4 w-4 ml-2" />
+                استيراد CSV
               </Button>
               
               <Button size="sm">
@@ -532,6 +711,754 @@ export default function LeadsPage() {
                   </Button>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Main Features Tabs */}
+        <motion.div
+          className="mb-6"
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+        >
+          <Card>
+            <CardContent className="p-4">
+              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
+                <div className="flex items-center justify-between">
+                  <TabsList className="grid w-auto grid-cols-6">
+                    <TabsTrigger value="overview" className="flex items-center">
+                      <BarChart3 className="w-4 h-4 ml-2" />
+                      نظرة عامة
+                    </TabsTrigger>
+                    <TabsTrigger value="csv" className="flex items-center">
+                      <FileSpreadsheet className="w-4 h-4 ml-2" />
+                      CSV
+                    </TabsTrigger>
+                    <TabsTrigger value="scoring" className="flex items-center">
+                      <Brain className="w-4 h-4 ml-2" />
+                      النقاط
+                    </TabsTrigger>
+                    <TabsTrigger value="assignment" className="flex items-center">
+                      <UserCheck className="w-4 h-4 ml-2" />
+                      التوزيع
+                    </TabsTrigger>
+                    <TabsTrigger value="pipeline" className="flex items-center">
+                      <GitBranch className="w-4 h-4 ml-2" />
+                      الخط
+                    </TabsTrigger>
+                    <TabsTrigger value="activities" className="flex items-center">
+                      <Activity className="w-4 h-4 ml-2" />
+                      الأنشطة
+                    </TabsTrigger>
+                  </TabsList>
+                  
+                  <div className="text-sm text-gray-600">
+                    إدارة متقدمة للعملاء المحتملين
+                  </div>
+                </div>
+                
+                {/* Overview Tab */}
+                <TabsContent value="overview" className="mt-6">
+                  <div className="space-y-6">
+                    {/* Analytics Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <Card>
+                        <CardContent className="p-6">
+                          <div className="flex items-center">
+                            <Users className="h-8 w-8 text-blue-600 ml-3" />
+                            <div>
+                              <p className="text-2xl font-bold text-gray-900">{leads.length}</p>
+                              <p className="text-xs text-gray-600">إجمالي العملاء</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card>
+                        <CardContent className="p-6">
+                          <div className="flex items-center">
+                            <Zap className="h-8 w-8 text-red-600 ml-3" />
+                            <div>
+                              <p className="text-2xl font-bold text-gray-900">{leads.filter(l => l.temperature === 'hot').length}</p>
+                              <p className="text-xs text-gray-600">عملاء ساخنين</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card>
+                        <CardContent className="p-6">
+                          <div className="flex items-center">
+                            <Star className="h-8 w-8 text-yellow-600 ml-3" />
+                            <div>
+                              <p className="text-2xl font-bold text-gray-900">
+                                {Math.round(leads.reduce((sum, lead) => sum + lead.score, 0) / leads.length)}
+                              </p>
+                              <p className="text-xs text-gray-600">متوسط النقاط</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card>
+                        <CardContent className="p-6">
+                          <div className="flex items-center">
+                            <Target className="h-8 w-8 text-green-600 ml-3" />
+                            <div>
+                              <p className="text-2xl font-bold text-gray-900">
+                                {leads.reduce((sum, lead) => sum + (lead.value || 0), 0).toLocaleString('ar-SA')}
+                              </p>
+                              <p className="text-xs text-gray-600">إجمالي القيمة (ريال)</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                    
+                    {/* Quick Actions */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>الإجراءات السريعة</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <Button 
+                            variant="outline" 
+                            className="h-20 flex flex-col"
+                            onClick={() => setShowCsvDialog(true)}
+                          >
+                            <Upload className="w-6 h-6 mb-2" />
+                            استيراد CSV
+                          </Button>
+                          
+                          <Button 
+                            variant="outline" 
+                            className="h-20 flex flex-col"
+                            onClick={() => setShowScoringDashboard(true)}
+                          >
+                            <Brain className="w-6 h-6 mb-2" />
+                            حساب النقاط
+                          </Button>
+                          
+                          <Button 
+                            variant="outline" 
+                            className="h-20 flex flex-col"
+                            onClick={() => setShowAssignmentDialog(true)}
+                          >
+                            <UserCheck className="w-6 h-6 mb-2" />
+                            توزيع العملاء
+                          </Button>
+                          
+                          <Button 
+                            variant="outline" 
+                            className="h-20 flex flex-col"
+                            onClick={() => setShowPipelineManager(true)}
+                          >
+                            <GitBranch className="w-6 h-6 mb-2" />
+                            إدارة المراحل
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+                
+                {/* CSV Management Tab */}
+                <TabsContent value="csv" className="mt-6">
+                      
+                      <Card>
+                        <CardContent className="p-6">
+                          <div className="flex items-center">
+                            <Star className="h-8 w-8 text-yellow-600 ml-3" />
+                            <div>
+                              <p className="text-2xl font-bold text-gray-900">
+                                {Math.round(leads.reduce((sum, lead) => sum + lead.score, 0) / leads.length)}
+                              </p>
+                              <p className="text-xs text-gray-600">متوسط النقاط</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      
+                      <Card>
+                        <CardContent className="p-6">
+                          <div className="flex items-center">
+                            <Target className="h-8 w-8 text-green-600 ml-3" />
+                            <div>
+                              <p className="text-2xl font-bold text-gray-900">
+                                {leads.reduce((sum, lead) => sum + (lead.value || 0), 0).toLocaleString('ar-SA')}
+                              </p>
+                              <p className="text-xs text-gray-600">إجمالي القيمة (ريال)</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                    
+                    {/* Quick Actions */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>الإجراءات السريعة</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <Button 
+                            variant="outline" 
+                            className="h-20 flex flex-col"
+                            onClick={() => setShowCsvDialog(true)}
+                          >
+                            <Upload className="w-6 h-6 mb-2" />
+                            استيراد CSV
+                          </Button>
+                          
+                          <Button 
+                            variant="outline" 
+                            className="h-20 flex flex-col"
+                            onClick={() => setShowScoringDashboard(true)}
+                          >
+                            <Brain className="w-6 h-6 mb-2" />
+                            حساب النقاط
+                          </Button>
+                          
+                          <Button 
+                            variant="outline" 
+                            className="h-20 flex flex-col"
+                            onClick={() => setShowAssignmentDialog(true)}
+                          >
+                            <UserCheck className="w-6 h-6 mb-2" />
+                            توزيع العملاء
+                          </Button>
+                          
+                          <Button 
+                            variant="outline" 
+                            className="h-20 flex flex-col"
+                            onClick={() => setShowPipelineManager(true)}
+                          >
+                            <GitBranch className="w-6 h-6 mb-2" />
+                            إدارة المراحل
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+                
+                {/* CSV Management Tab */}
+                <TabsContent value="csv" className="mt-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center">
+                          <UploadCloud className="w-5 h-5 ml-2" />
+                          استيراد البيانات
+                        </CardTitle>
+                        <CardDescription>
+                          رفع ملفات CSV للاستيراد الجماعي للعملاء
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                          <UploadCloud className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                          <div className="mb-4">
+                            <p className="text-lg font-medium">اسحب ملف CSV هنا</p>
+                            <p className="text-sm text-gray-600">أو انقر للاختيار</p>
+                          </div>
+                          <input
+                            type="file"
+                            accept=".csv"
+                            onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                            className="hidden"
+                            id="csv-upload"
+                          />
+                          <label htmlFor="csv-upload">
+                            <Button variant="outline" className="cursor-pointer">
+                              اختيار ملف
+                            </Button>
+                          </label>
+                          {csvFile && (
+                            <p className="mt-2 text-sm text-green-600">
+                              الملف المختار: {csvFile.name}
+                            </p>
+                          )}
+                        </div>
+                        
+                        {csvFile && (
+                          <Button onClick={handleCsvUpload} className="w-full" size="lg">
+                            <Upload className="w-4 h-4 ml-2" />
+                            بدء الاستيراد
+                          </Button>
+                        )}
+                        
+                        {csvStatus !== 'idle' && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span>حالة الاستيراد</span>
+                              <span>
+                                {csvStatus === 'uploading' && 'جاري الرفع...'}
+                                {csvStatus === 'processing' && 'جاري المعالجة...'}
+                                {csvStatus === 'completed' && 'مكتمل'}
+                                {csvStatus === 'error' && 'خطأ'}
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div 
+                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${csvProgress}%` }}
+                              ></div>
+                            </div>
+                            <p className="text-sm text-gray-600">{csvProgress}%</p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                    
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center">
+                          <Download className="w-5 h-5 ml-2" />
+                          تصدير البيانات
+                        </CardTitle>
+                        <CardDescription>
+                          تصدير بيانات العملاء إلى ملف CSV
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <Button variant="outline" onClick={handleCsvExport}>
+                            <Download className="w-4 h-4 ml-2" />
+                            تصدير الكل
+                          </Button>
+                          <Button variant="outline">
+                            <FileText className="w-4 h-4 ml-2" />
+                            تصدير القالب
+                          </Button>
+                        </div>
+                        
+                        <div className="border rounded-lg p-4">
+                          <h4 className="font-medium mb-2">خيارات التصدير</h4>
+                          <div className="space-y-2">
+                            <label className="flex items-center">
+                              <input type="checkbox" className="ml-2" defaultChecked />
+                              البيانات الأساسية
+                            </label>
+                            <label className="flex items-center">
+                              <input type="checkbox" className="ml-2" />
+                              النقاط والتقييمات
+                            </label>
+                            <label className="flex items-center">
+                              <input type="checkbox" className="ml-2" />
+                              سجل الأنشطة
+                            </label>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+                
+                {/* Scoring Dashboard Tab */}
+                <TabsContent value="scoring" className="mt-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <Card className="lg:col-span-2">
+                      <CardHeader>
+                        <CardTitle className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <Brain className="w-5 h-5 ml-2" />
+                            لوحة النقاط الذكية
+                          </div>
+                          <Button variant="outline" size="sm" onClick={handleRecalculateScores}>
+                            <Bot className="w-4 h-4 ml-2" />
+                            إعادة الحساب
+                          </Button>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-6">
+                          {/* Score Distribution */}
+                          <div>
+                            <h4 className="font-medium mb-3">توزيع النقاط</h4>
+                            <div className="grid grid-cols-4 gap-4">
+                              {[
+                                { label: 'عالية (80-100)', color: 'bg-green-500', count: leads.filter(l => l.score >= 80).length },
+                                { label: 'متوسطة (60-79)', color: 'bg-yellow-500', count: leads.filter(l => l.score >= 60 && l.score < 80).length },
+                                { label: 'منخفضة (40-59)', color: 'bg-orange-500', count: leads.filter(l => l.score >= 40 && l.score < 60).length },
+                                { label: 'ضعيفة (0-39)', color: 'bg-red-500', count: leads.filter(l => l.score < 40).length },
+                              ].map((range, index) => (
+                                <div key={index} className="text-center">
+                                  <div className={`w-16 h-16 ${range.color} rounded-full flex items-center justify-center text-white font-bold mx-auto mb-2`}>
+                                    {range.count}
+                                  </div>
+                                  <p className="text-xs text-gray-600">{range.label}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          
+                          {/* Top Scored Leads */}
+                          <div>
+                            <h4 className="font-medium mb-3">أعلى النقاط</h4>
+                            <div className="space-y-3">
+                              {leads
+                                .sort((a, b) => b.score - a.score)
+                                .slice(0, 5)
+                                .map((lead, index) => (
+                                  <div key={lead.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                    <div className="flex items-center space-x-3 space-x-reverse">
+                                      <div className="text-lg font-bold text-blue-600">#{index + 1}</div>
+                                      <div>
+                                        <p className="font-medium">{lead.firstName} {lead.lastName}</p>
+                                        <p className="text-sm text-gray-600">{lead.company}</p>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center space-x-2 space-x-reverse">
+                                      <Star className="w-4 h-4 text-yellow-500" />
+                                      <span className="font-bold">{lead.score}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center">
+                          <Sparkles className="w-5 h-5 ml-2" />
+                          إحصائيات سريعة
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-blue-600">
+                              {Math.round(leads.reduce((sum, lead) => sum + lead.score, 0) / leads.length)}
+                            </div>
+                            <div className="text-sm text-gray-600">متوسط النقاط</div>
+                          </div>
+                          
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-green-600">
+                              {Math.round(leads.filter(l => l.score >= 80).length / leads.length * 100)}%
+                            </div>
+                            <div className="text-sm text-gray-600">عملاء عالي الجودة</div>
+                          </div>
+                          
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-purple-600">
+                              {leads.filter(l => l.temperature === 'hot').length}
+                            </div>
+                            <div className="text-sm text-gray-600">عميل ساخن</div>
+                          </div>
+                          
+                          <div className="pt-4 border-t">
+                            <Button className="w-full" variant="outline" size="sm">
+                              <TrendingUp className="w-4 h-4 ml-2" />
+                              تقرير مفصل
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+                
+                {/* Assignment Management Tab */}
+                <TabsContent value="assignment" className="mt-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center">
+                          <Shuffle className="w-5 h-5 ml-2" />
+                          التوزيع التلقائي
+                        </CardTitle>
+                        <CardDescription>
+                          قواعد التوزيع الذكية للعملاء
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between p-3 border rounded-lg">
+                            <div>
+                              <h4 className="font-medium">التوزيع حسب المنطقة</h4>
+                              <p className="text-sm text-gray-600">توزيع العملاء حسب المناطق الجغرافية</p>
+                            </div>
+                            <Button 
+                              size="sm" 
+                              onClick={() => handleAutoAssignment('territory')}
+                              variant="outline"
+                            >
+                              تفعيل
+                            </Button>
+                          </div>
+                          
+                          <div className="flex items-center justify-between p-3 border rounded-lg">
+                            <div>
+                              <h4 className="font-medium">التوزيع بالتناوب</h4>
+                              <p className="text-sm text-gray-600">توزيع متساوي بين أعضاء الفريق</p>
+                            </div>
+                            <Button 
+                              size="sm" 
+                              onClick={() => handleAutoAssignment('round_robin')}
+                              variant="outline"
+                            >
+                              تفعيل
+                            </Button>
+                          </div>
+                          
+                          <div className="flex items-center justify-between p-3 border rounded-lg">
+                            <div>
+                              <h4 className="font-medium">التوزيع حسب الحمل</h4>
+                              <p className="text-sm text-gray-600">إرسال للعملاء الأقل حملاً</p>
+                            </div>
+                            <Button 
+                              size="sm" 
+                              onClick={() => handleAutoAssignment('load_based')}
+                              variant="outline"
+                            >
+                              تفعيل
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center">
+                          <UserCheck className="w-5 h-5 ml-2" />
+                          التوزيع اليدوي
+                        </CardTitle>
+                        <CardDescription>
+                          توزيع محدد للعملاء المختارين
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="border rounded-lg p-4">
+                          <h4 className="font-medium mb-3">العملاء المختارين ({selectedLeads.length})</h4>
+                          <div className="space-y-2 max-h-32 overflow-y-auto">
+                            {selectedLeads.map(leadId => {
+                              const lead = leads.find(l => l.id === leadId);
+                              return lead ? (
+                                <div key={leadId} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                  <span className="text-sm">{lead.firstName} {lead.lastName}</span>
+                                  <Button size="sm" variant="ghost">
+                                    <X className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                              ) : null;
+                            })}
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          <Select>
+                            <SelectTrigger>
+                              <SelectValue placeholder="اختر عضو الفريق" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="user1">أحمد محمد</SelectItem>
+                              <SelectItem value="user2">سارة أحمد</SelectItem>
+                              <SelectItem value="user3">محمد علي</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          
+                          <Button className="w-full">
+                            <UserCheck className="w-4 h-4 ml-2" />
+                            توزيع محدد
+                          </Button>
+                        </div>
+                        
+                        <div className="pt-4 border-t">
+                          <Button variant="outline" className="w-full" size="sm">
+                            <Settings className="w-4 h-4 ml-2" />
+                            قواعد مخصصة
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+                
+                {/* Pipeline Management Tab */}
+                <TabsContent value="pipeline" className="mt-6">
+                  <div className="space-y-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <GitBranch className="w-5 h-5 ml-2" />
+                            إدارة مراحل العمل
+                          </div>
+                          <Button size="sm" onClick={() => setShowPipelineManager(true)}>
+                            <Settings className="w-4 h-4 ml-2" />
+                            إدارة المراحل
+                          </Button>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                          {pipelineStages
+                            .sort((a, b) => a.order - b.order)
+                            .map((stage) => (
+                              <div
+                                key={stage.id}
+                                className="border-2 border-dashed border-gray-300 rounded-lg p-4 min-h-48 transition-colors"
+                                style={{
+                                  borderColor: draggedStage === stage.id ? stage.color : undefined,
+                                  backgroundColor: draggedStage === stage.id ? `${stage.color}10` : undefined
+                                }}
+                                onDragOver={handleDragOver}
+                                onDrop={() => handleDrop(stage.id)}
+                              >
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex items-center">
+                                    <div 
+                                      className="w-3 h-3 rounded-full ml-2" 
+                                      style={{ backgroundColor: stage.color }}
+                                    ></div>
+                                    <h3 className="font-medium text-sm">{stage.name}</h3>
+                                  </div>
+                                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                    {stage.leads.length}
+                                  </span>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                  {stage.leads.map((lead) => (
+                                    <div
+                                      key={lead.id}
+                                      draggable
+                                      onDragStart={() => handleDragStart(stage.id)}
+                                      className="bg-white border border-gray-200 rounded p-2 cursor-move hover:shadow-sm transition-shadow"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <div>
+                                          <p className="text-xs font-medium">{lead.firstName} {lead.lastName}</p>
+                                          <p className="text-xs text-gray-600">{lead.company}</p>
+                                        </div>
+                                        <div className="flex items-center space-x-1 space-x-reverse">
+                                          <Star className="w-3 h-3 text-yellow-500" />
+                                          <span className="text-xs font-medium">{lead.score}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  
+                                  {stage.leads.length === 0 && (
+                                    <div className="text-center text-gray-400 text-xs py-4">
+                                      لا توجد عملاء
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+                
+                {/* Activities Timeline Tab */}
+                <TabsContent value="activities" className="mt-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <Card className="lg:col-span-2">
+                      <CardHeader>
+                        <CardTitle className="flex items-center">
+                          <Activity className="w-5 h-5 ml-2" />
+                          خط الأنشطة الزمني
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-6">
+                          {leads.map((lead) => (
+                            <div key={lead.id} className="border-b border-gray-200 pb-6 last:border-b-0">
+                              <div className="flex items-center space-x-3 space-x-reverse mb-4">
+                                <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium">
+                                  {lead.firstName.charAt(0)}{lead.lastName.charAt(0)}
+                                </div>
+                                <div>
+                                  <h4 className="font-medium">{lead.firstName} {lead.lastName}</h4>
+                                  <p className="text-sm text-gray-600">{lead.company}</p>
+                                </div>
+                                <Badge className={getTemperatureColor(lead.temperature)}>
+                                  {getTemperatureLabel(lead.temperature)}
+                                </Badge>
+                              </div>
+                              
+                              <div className="space-y-3">
+                                {/* Sample activities for each lead */}
+                                <div className="flex items-center space-x-3 space-x-reverse p-3 bg-blue-50 rounded-lg">
+                                  <Mail className="w-4 h-4 text-blue-600" />
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium">تم إرسال بريد إلكتروني</p>
+                                    <p className="text-xs text-gray-600">رسالة ترحيبية - قبل يومين</p>
+                                  </div>
+                                  <Clock className="w-4 h-4 text-gray-400" />
+                                </div>
+                                
+                                <div className="flex items-center space-x-3 space-x-reverse p-3 bg-green-50 rounded-lg">
+                                  <Phone className="w-4 h-4 text-green-600" />
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium">مكالمة هاتفية</p>
+                                    <p className="text-xs text-gray-600">مناقشة المتطلبات - قبل 3 أيام</p>
+                                  </div>
+                                  <Clock className="w-4 h-4 text-gray-400" />
+                                </div>
+                                
+                                <div className="flex items-center space-x-3 space-x-reverse p-3 bg-purple-50 rounded-lg">
+                                  <Calendar className="w-4 h-4 text-purple-600" />
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium">اجتماع مُحدد</p>
+                                    <p className="text-xs text-gray-600">عرض المنتج - غداً</p>
+                                  </div>
+                                  <Timer className="w-4 h-4 text-orange-500" />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center">
+                          <Timer className="w-5 h-5 ml-2" />
+                          إحصائيات الأنشطة
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-blue-600">47</div>
+                            <div className="text-sm text-gray-600">مكالمة هذا الشهر</div>
+                          </div>
+                          
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-green-600">23</div>
+                            <div className="text-sm text-gray-600">بريد إلكتروني</div>
+                          </div>
+                          
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-purple-600">8</div>
+                            <div className="text-sm text-gray-600">اجتماع</div>
+                          </div>
+                          
+                          <div className="pt-4 border-t">
+                            <Button className="w-full" variant="outline" size="sm">
+                              <Plus className="w-4 h-4 ml-2" />
+                              إضافة نشاط
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
         </motion.div>
@@ -1063,6 +1990,80 @@ export default function LeadsPage() {
           </motion.div>
         )}
       </div>
+
+      {/* CSV Import Dialog */}
+      <Dialog open={showCsvDialog} onOpenChange={setShowCsvDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <FileSpreadsheet className="w-5 h-5 ml-2" />
+              استيراد بيانات العملاء
+            </DialogTitle>
+            <DialogDescription>
+              رفع ملف CSV لاستيراد بيانات العملاء المحتملين
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+              <UploadCloud className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <div className="space-y-2">
+                <p className="text-lg font-medium">اسحب ملف CSV هنا</p>
+                <p className="text-sm text-gray-600">أو انقر لاختيار الملف من جهازك</p>
+              </div>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                className="hidden"
+                id="csv-upload-dialog"
+              />
+              <label htmlFor="csv-upload-dialog">
+                <Button variant="outline" className="mt-4 cursor-pointer">
+                  اختيار ملف CSV
+                </Button>
+              </label>
+            </div>
+            
+            {csvFile && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-center">
+                  <CheckCircle className="w-5 h-5 text-green-600 ml-2" />
+                  <div>
+                    <p className="text-sm font-medium text-green-800">تم اختيار الملف</p>
+                    <p className="text-sm text-green-600">{csvFile.name}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="font-medium text-blue-900 mb-2">متطلبات الملف:</h4>
+              <ul className="text-sm text-blue-800 space-y-1">
+                <li>• يجب أن يكون الملف بتنسيق CSV</li>
+                <li>• يجب أن يحتوي على الأعمدة: الاسم، البريد الإلكتروني، الشركة</li>
+                <li>• الحد الأقصى لحجم الملف 10 ميجابايت</li>
+              </ul>
+            </div>
+            
+            <div className="flex justify-end space-x-3 space-x-reverse">
+              <Button variant="outline" onClick={() => setShowCsvDialog(false)}>
+                إلغاء
+              </Button>
+              <Button 
+                onClick={() => {
+                  handleCsvUpload();
+                  setShowCsvDialog(false);
+                }}
+                disabled={!csvFile}
+              >
+                <Upload className="w-4 h-4 ml-2" />
+                بدء الاستيراد
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

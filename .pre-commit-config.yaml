@@ -1,0 +1,160 @@
+# Pre-commit hooks configuration for quality and security
+repos:
+  # Python formatting
+  - repo: https://github.com/psf/black
+    rev: 23.12.1
+    hooks:
+      - id: black
+        language_version: python3.12
+        args: [--line-length=100, --target-version=py312]
+
+  # Python import sorting
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: [--profile=black, --line-length=100, --multi-line=3]
+
+  # Python linting
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        additional_dependencies: [flake8-docstrings, flake8-bugbear, flake8-comprehensions, flake8-simplify]
+        args: [--max-line-length=100, --extend-ignore=E203,W503]
+
+  # Python type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-requests, types-redis, types-PyYAML]
+        args: [--config-file=.mypy.ini]
+
+  # Python security linting
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        args: [-r, -f, json, -o, bandit-report.json]
+        exclude: ^tests/
+
+  # Python test hooks
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: pytest
+        language: system
+        pass_filenames: false
+        always_run: true
+        args: [--tb=short, -q]
+        stages: [commit]
+
+  # JavaScript/TypeScript linting
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v8.56.0
+    hooks:
+      - id: eslint
+        files: \.(js|jsx|ts|tsx)$
+        types: [file]
+        additional_dependencies:
+          - eslint@8.56.0
+          - eslint-plugin-react@7.33.2
+          - eslint-plugin-react-hooks@4.6.0
+          - eslint-plugin-import@2.29.1
+          - eslint-plugin-jsx-a11y@6.8.0
+        args: [--fix, --ext, .js,.jsx,.ts,.tsx]
+
+  # JavaScript/TypeScript formatting
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        files: \.(js|jsx|ts|tsx|json|yaml|yml|md)$
+        exclude: ^(node_modules|dist|build|\.next)/
+
+  # Conventional commits
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.0.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [optional-scope]
+
+  # Shell script linting
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        args: [--severity=warning]
+
+  # YAML formatting
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        files: \.(yaml|yml)$
+        args: [--parser=yaml]
+
+  # JSON validation and formatting
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        files: \.json$
+        args: [--parser=json]
+
+  # Dockerfile linting
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        args: [--ignore, DL3008, --ignore, DL3009]
+
+  # General checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      # Prevent committing large files
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      # Check for files that parse as valid python
+      - id: check-ast
+      # Check for case conflicts on case-insensitive filesystems
+      - id: check-case-conflict
+      # Check for files that contain merge conflict strings
+      - id: check-merge-conflict
+      # Check for debugger imports and py37+ `breakpoint()` calls
+      - id: debug-statements
+      # Check yaml files for parseable syntax
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      # Check json files for parseable syntax
+      - id: check-json
+      # Check for obvious mistakes
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      # Ensure that (non-binary) files end with a newline
+      - id: end-of-file-fixer
+      # Remove trailing whitespace
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      # Replaces or checks mixed line endings
+      - id: mixed-line-ending
+      # Enforce that commit messages follow conventional commit format
+      - id: check-commit-message
+        args: [--message-pattern=^(feat|fix|docs|style|refactor|test|chore|build|ci|perf|revert)(\(.+\))?: .+$]
+
+# Configure pre-commit ci
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: []
+  submodules: false

@@ -1,0 +1,689 @@
+name: 🚀 Deploy Pipeline
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      force_deploy:
+        description: 'Force deployment even if tests fail'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  NODE_VERSION: '20'
+  PYTHON_VERSION: '3.11'
+
+concurrency:
+  group: deploy-${{ github.ref }}-${{ github.event.inputs.environment || 'prod' }}
+  cancel-in-progress: false
+
+jobs:
+  # ==================== PRE-DEPLOYMENT CHECKS ====================
+  pre-deployment:
+    name: ✅ Pre-deployment Checks
+    runs-on: ubuntu-latest
+    outputs:
+      deploy-allowed: ${{ steps.check.outputs.deploy-allowed }}
+      version: ${{ steps.version.outputs.version }}
+      commit-message: ${{ steps.version.outputs.commit-message }}
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🔍 Version Analysis
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION="sha-${{ github.sha }}"
+          fi
+          
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "commit-message=$COMMIT_MSG" >> $GITHUB_OUTPUT
+          
+          echo "**📦 Version**: $VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "**📝 Commit**: $COMMIT_MSG" >> $GITHUB_STEP_SUMMARY
+
+      - name: 🔒 Security Check
+        run: |
+          echo "#### 🔒 Security Pre-flight Check" >> $GITHUB_STEP_SUMMARY
+          
+          # Check if security workflow passed
+          SECURITY_STATUS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runs?branch=${{ github.ref_name }}&event=push" | \
+            jq -r '.workflow_runs[] | select(.name == "🔒 Security Pipeline") | .conclusion' | head -1)
+          
+          if [[ "$SECURITY_STATUS" == "success" ]]; then
+            echo "✅ **Security scan passed**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Security scan not found or failed - manual review required**" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: ✅ Deployment Readiness Check
+        id: check
+        run: |
+          echo "#### ✅ Deployment Readiness" >> $GITHUB_STEP_SUMMARY
+          
+          # Check if it's a tagged release
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "📦 **Tagged release detected**" >> $GITHUB_STEP_SUMMARY
+            echo "deploy-allowed=true" >> $GITHUB_OUTPUT
+          else
+            # Check if it's main branch
+            if [[ "${{ github.ref_name }}" == "main" ]]; then
+              echo "🌿 **Main branch deployment**" >> $GITHUB_STEP_SUMMARY
+              
+              # Check for breaking changes
+              if git diff --name-only HEAD~1 HEAD | grep -q -E "(BREAKING|breaking)"; then
+                echo "⚠️ **Breaking changes detected - manual review required**" >> $GITHUB_STEP_SUMMARY
+                echo "deploy-allowed=false" >> $GITHUB_OUTPUT
+              else
+                echo "✅ **No breaking changes detected**" >> $GITHUB_STEP_SUMMARY
+                echo "deploy-allowed=true" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "❌ **Deployment only allowed from main branch or tags**" >> $GITHUB_STEP_SUMMARY
+              echo "deploy-allowed=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+  # ==================== DOCKER BUILD & PUSH ====================
+  build-images:
+    name: 🐳 Build & Push Images
+    runs-on: ubuntu-latest
+    needs: pre-deployment
+    if: needs.pre-deployment.outputs.deploy-allowed == 'true'
+    
+    outputs:
+      frontend-tag: ${{ steps.meta.outputs.tagsFrontend }}
+      backend-tag: ${{ steps.meta.outputs.tagsBackend }}
+      
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔑 Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🏷️ Extract Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ needs.pre-deployment.outputs.version }}
+
+      - name: 🏗️ Build and Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./saler/backend
+          file: ./saler/backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ needs.pre-deployment.outputs.version }}
+            COMMIT_SHA=${{ github.sha }}
+
+      - name: 🏗️ Build and Push Frontend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./saler/frontend
+          file: ./saler/frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ needs.pre-deployment.outputs.version }}
+            COMMIT_SHA=${{ github.sha }}
+
+      - name: 📊 Build Summary
+        run: |
+          echo "#### 🏷️ Image Tags" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend Image**: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend Image**: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: ${{ needs.pre-deployment.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+
+  # ==================== DATABASE MIGRATIONS ====================
+  database-migrations:
+    name: 🗄️ Database Migrations
+    runs-on: ubuntu-latest
+    needs: [pre-deployment, build-images]
+    if: needs.pre-deployment.outputs.deploy-allowed == 'true'
+    
+    environment:
+      name: ${{ github.event.inputs.environment || 'prod' }}
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: 🔧 Setup Database Environment
+        run: |
+          echo "#### 🗄️ Migration Environment Setup" >> $GITHUB_STEP_SUMMARY
+          echo "**Target Environment**: ${{ github.event.inputs.environment || 'prod' }}" >> $GITHUB_STEP_SUMMARY
+          
+          # Set environment-specific database URL
+          case "${{ github.event.inputs.environment || 'prod' }}" in
+            dev)
+              echo "DATABASE_URL=${{ secrets.DEV_DATABASE_URL }}" >> $GITHUB_ENV
+              ;;
+            staging)
+              echo "DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }}" >> $GITHUB_ENV
+              ;;
+            prod)
+              echo "DATABASE_URL=${{ secrets.PROD_DATABASE_URL }}" >> $GITHUB_ENV
+              ;;
+          esac
+
+      - name: 🔧 Install Dependencies
+        run: |
+          cd saler/backend
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install alembic
+
+      - name: 🔍 Migration Dry Run
+        run: |
+          cd saler/backend
+          echo "##### 🔍 Migration Dry Run" >> $GITHUB_STEP_SUMMARY
+          
+          # Check current migration status
+          alembic current || true
+          alembic heads || true
+          
+          echo "✅ **Migration analysis completed**" >> $GITHUB_STEP_SUMMARY
+
+      - name: ⬆️ Apply Migrations
+        run: |
+          cd saler/backend
+          echo "##### ⬆️ Applying Database Migrations" >> $GITHUB_STEP_SUMMARY
+          
+          alembic upgrade head
+          
+          echo "✅ **Database migrations applied successfully**" >> $GITHUB_STEP_SUMMARY
+
+      - name: ✅ Migration Verification
+        run: |
+          cd saler/backend
+          echo "##### ✅ Migration Verification" >> $GITHUB_STEP_SUMMARY
+          
+          # Verify migration was successful
+          CURRENT=$(alembic current)
+          echo "**Current Migration**: $CURRENT" >> $GITHUB_STEP_SUMMARY
+          
+          # Test database connectivity
+          python -c "
+          import asyncio
+          from app.core.database import get_database_url, create_engine
+          
+          async def test_db():
+              engine = create_engine(get_database_url())
+              async with engine.connect() as conn:
+                  result = await conn.execute('SELECT 1')
+                  print('Database connection successful')
+          
+          asyncio.run(test_db())
+          "
+          
+          echo "✅ **Database verification completed**" >> $GITHUB_STEP_SUMMARY
+
+  # ==================== BACKEND DEPLOYMENT ====================
+  deploy-backend:
+    name: ⚡ Deploy Backend
+    runs-on: ubuntu-latest
+    needs: [pre-deployment, build-images, database-migrations]
+    if: needs.pre-deployment.outputs.deploy-allowed == 'true'
+    
+    environment:
+      name: ${{ github.event.inputs.environment || 'prod' }}
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: 🔑 Configure Kubernetes
+        run: |
+          echo "#### ⚙️ Kubernetes Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment**: ${{ github.event.inputs.environment || 'prod' }}" >> $GITHUB_STEP_SUMMARY
+          
+          # Set KUBECONFIG
+          echo "${{ secrets.KUBECONFIG_DATA }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+          
+          # Verify cluster access
+          kubectl cluster-info
+
+      - name: 🔄 Deploy Backend
+        run: |
+          echo "##### 🚀 Deploying Backend Application" >> $GITHUB_STEP_SUMMARY
+          
+          export KUBECONFIG=kubeconfig
+          
+          # Apply Kubernetes manifests
+          kubectl apply -f saler/k8s/postgres-deployment.yml -n ${{ github.event.inputs.environment || 'prod' }}
+          kubectl apply -f saler/k8s/redis-deployment.yml -n ${{ github.event.inputs.environment || 'prod' }}
+          kubectl apply -f saler/k8s/backend-deployment.yml -n ${{ github.event.inputs.environment || 'prod' }}
+          
+          # Update image
+          kubectl set image deployment/backend \
+            backend=${{ needs.build-images.outputs.backend-tag }} \
+            -n ${{ github.event.inputs.environment || 'prod' }}
+          
+          echo "✅ **Backend deployment initiated**" >> $GITHUB_STEP_SUMMARY
+
+      - name: ⏳ Wait for Rollout
+        run: |
+          export KUBECONFIG=kubeconfig
+          
+          echo "##### ⏳ Waiting for Deployment Rollout" >> $GITHUB_STEP_SUMMARY
+          
+          kubectl rollout status deployment/backend \
+            -n ${{ github.event.inputs.environment || 'prod' }} \
+            --timeout=600s
+          
+          echo "✅ **Backend rollout completed**" >> $GITHUB_STEP_SUMMARY
+
+      - name: 🏥 Backend Health Check
+        run: |
+          export KUBECONFIG=kubeconfig
+          
+          echo "##### 🏥 Backend Health Check" >> $GITHUB_STEP_SUMMARY
+          
+          # Get service URL
+          SERVICE_IP=$(kubectl get service backend -n ${{ github.event.inputs.environment || 'prod' }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          
+          # Wait for service to be ready
+          timeout 300 bash -c "
+            until curl -f http://$SERVICE_IP/health; do
+              echo 'Waiting for backend to be ready...'
+              sleep 5
+            done
+          "
+          
+          echo "✅ **Backend health check passed**" >> $GITHUB_STEP_SUMMARY
+
+  # ==================== FRONTEND DEPLOYMENT ====================
+  deploy-frontend:
+    name: 🎨 Deploy Frontend
+    runs-on: ubuntu-latest
+    needs: [pre-deployment, build-images]
+    if: needs.pre-deployment.outputs.deploy-allowed == 'true'
+    
+    environment:
+      name: ${{ github.event.inputs.environment || 'prod' }}
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: 🔑 Configure Kubernetes
+        run: |
+          echo "#### ⚙️ Kubernetes Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment**: ${{ github.event.inputs.environment || 'prod' }}" >> $GITHUB_STEP_SUMMARY
+          
+          # Set KUBECONFIG
+          echo "${{ secrets.KUBECONFIG_DATA }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+          
+          # Verify cluster access
+          kubectl cluster-info
+
+      - name: 🔄 Deploy Frontend
+        run: |
+          echo "##### 🚀 Deploying Frontend Application" >> $GITHUB_STEP_SUMMARY
+          
+          export KUBECONFIG=kubeconfig
+          
+          # Apply Kubernetes manifests
+          kubectl apply -f saler/k8s/frontend-deployment.yml -n ${{ github.event.inputs.environment || 'prod' }}
+          
+          # Update image
+          kubectl set image deployment/frontend \
+            frontend=${{ needs.build-images.outputs.frontend-tag }} \
+            -n ${{ github.event.inputs.environment || 'prod' }}
+          
+          echo "✅ **Frontend deployment initiated**" >> $GITHUB_STEP_SUMMARY
+
+      - name: ⏳ Wait for Rollout
+        run: |
+          export KUBECONFIG=kubeconfig
+          
+          echo "##### ⏳ Waiting for Deployment Rollout" >> $GITHUB_STEP_SUMMARY
+          
+          kubectl rollout status deployment/frontend \
+            -n ${{ github.event.inputs.environment || 'prod' }} \
+            --timeout=600s
+          
+          echo "✅ **Frontend rollout completed**" >> $GITHUB_STEP_SUMMARY
+
+      - name: 🏥 Frontend Health Check
+        run: |
+          export KUBECONFIG=kubeconfig
+          
+          echo "##### 🏥 Frontend Health Check" >> $GITHUB_STEP_SUMMARY
+          
+          # Get service URL
+          SERVICE_IP=$(kubectl get service frontend -n ${{ github.event.inputs.environment || 'prod' }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          
+          # Wait for service to be ready
+          timeout 300 bash -c "
+            until curl -f http://$SERVICE_IP; do
+              echo 'Waiting for frontend to be ready...'
+              sleep 5
+            done
+          "
+          
+          echo "✅ **Frontend health check passed**" >> $GITHUB_STEP_SUMMARY
+
+  # ==================== INGRESS & NETWORKING ====================
+  deploy-networking:
+    name: 🌐 Configure Ingress & Networking
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+    if: needs.pre-deployment.outputs.deploy-allowed == 'true'
+    
+    environment:
+      name: ${{ github.event.inputs.environment || 'prod' }}
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: 🔑 Configure Kubernetes
+        run: |
+          echo "${{ secrets.KUBECONFIG_DATA }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+      - name: 🚦 Deploy Ingress
+        run: |
+          echo "#### 🌐 Configuring Ingress & Load Balancer" >> $GITHUB_STEP_SUMMARY
+          
+          export KUBECONFIG=kubeconfig
+          
+          # Apply ingress configuration
+          kubectl apply -f saler/k8s/ingress.yml -n ${{ github.event.inputs.environment || 'prod' }}
+          
+          echo "✅ **Ingress configured successfully**" >> $GITHUB_STEP_SUMMARY
+
+      - name: 📊 Network Status
+        run: |
+          export KUBECONFIG=kubeconfig
+          
+          echo "##### 📊 Network Status" >> $GITHUB_STEP_SUMMARY
+          
+          # Get ingress details
+          kubectl get ingress -n ${{ github.event.inputs.environment || 'prod' }}
+          
+          # Get services
+          kubectl get services -n ${{ github.event.inputs.environment || 'prod' }}
+          
+          echo "✅ **Network configuration verified**" >> $GITHUB_STEP_SUMMARY
+
+  # ==================== MONITORING & ALERTS ====================
+  setup-monitoring:
+    name: 📊 Setup Monitoring
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+    if: needs.pre-deployment.outputs.deploy-allowed == 'true'
+    
+    environment:
+      name: ${{ github.event.inputs.environment || 'prod' }}
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: 🔑 Configure Kubernetes
+        run: |
+          echo "${{ secrets.KUBECONFIG_DATA }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+      - name: 📊 Deploy Monitoring Stack
+        run: |
+          echo "#### 📊 Deploying Monitoring Stack" >> $GITHUB_STEP_SUMMARY
+          
+          export KUBECONFIG=kubeconfig
+          
+          # Apply monitoring configurations
+          kubectl apply -f saler/k8s/monitoring.yml -n ${{ github.event.inputs.environment || 'prod' }}
+          
+          echo "✅ **Monitoring stack deployed**" >> $GITHUB_STEP_SUMMARY
+
+      - name: 🔔 Configure Alerts
+        run: |
+          echo "##### 🔔 Setting up Alerting" >> $GITHUB_STEP_SUMMARY
+          
+          # Configure alerting rules
+          kubectl apply -f saler/k8s/alert-rules.yml -n ${{ github.event.inputs.environment || 'prod' }}
+          
+          echo "✅ **Alerting configured**" >> $GITHUB_STEP_SUMMARY
+
+  # ==================== POST-DEPLOYMENT VALIDATION ====================
+  post-deployment-validation:
+    name: ✅ Post-deployment Validation
+    runs-on: ubuntu-latest
+    needs: [deploy-networking, setup-monitoring]
+    if: needs.pre-deployment.outputs.deploy-allowed == 'true'
+    timeout-minutes: 15
+    
+    steps:
+      - name: 🔍 Smoke Tests
+        run: |
+          echo "#### 🧪 Running Smoke Tests" >> $GITHUB_STEP_SUMMARY
+          
+          # Get service URLs
+          BACKEND_URL="${{ secrets.BACKEND_SERVICE_URL }}/health"
+          FRONTEND_URL="${{ secrets.FRONTEND_SERVICE_URL }}"
+          
+          echo "**Backend URL**: $BACKEND_URL" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend URL**: $FRONTEND_URL" >> $GITHUB_STEP_SUMMARY
+          
+          # Test backend health
+          echo "##### ⚡ Backend Health Test" >> $GITHUB_STEP_SUMMARY
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" $BACKEND_URL)
+          
+          if [[ "$RESPONSE" == "200" ]]; then
+            echo "✅ **Backend health check passed**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Backend health check failed (HTTP $RESPONSE)**" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          
+          # Test frontend
+          echo "##### 🎨 Frontend Availability Test" >> $GITHUB_STEP_SUMMARY
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" $FRONTEND_URL)
+          
+          if [[ "$RESPONSE" == "200" ]]; then
+            echo "✅ **Frontend availability check passed**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Frontend availability check failed (HTTP $RESPONSE)**" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+      - name: 📊 Performance Check
+        run: |
+          echo "#### ⚡ Performance Validation" >> $GITHUB_STEP_SUMMARY
+          
+          # Check response times
+          BACKEND_URL="${{ secrets.BACKEND_SERVICE_URL }}"
+          
+          # Measure response time
+          RESPONSE_TIME=$(curl -o /dev/null -s -w "%{time_total}" $BACKEND_URL/health)
+          
+          echo "**Backend Response Time**: ${RESPONSE_TIME}s" >> $GITHUB_STEP_SUMMARY
+          
+          if (( $(echo "$RESPONSE_TIME < 2.0" | bc -l) )); then
+            echo "✅ **Performance check passed**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Performance check slow (> 2s)**" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==================== DEPLOYMENT COMPLETE ====================
+  deployment-complete:
+    name: 🎉 Deployment Complete
+    runs-on: ubuntu-latest
+    needs: [post-deployment-validation]
+    if: always() && needs.post-deployment-validation.result == 'success'
+    
+    steps:
+      - name: 🎊 Generate Success Report
+        run: |
+          echo "## 🎉 Deployment Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: ${{ github.event.inputs.environment || 'prod' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ needs.pre-deployment.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployed by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Service URLs" >> $GITHUB_STEP_SUMMARY
+          echo "- **Frontend**: ${{ secrets.FRONTEND_SERVICE_URL }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend**: ${{ secrets.BACKEND_SERVICE_URL }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Database migrations applied" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Backend deployed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Frontend deployed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Monitoring configured" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Smoke tests passed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "📅 **Deployed at**: $(date)" >> $GITHUB_STEP_SUMMARY
+
+      - name: 📢 Slack Notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#deployments'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          message: "🎉 Deployment successful! Environment: ${{ github.event.inputs.environment || 'prod' }}, Version: ${{ needs.pre-deployment.outputs.version }}"
+
+      - name: 📧 Email Notification
+        if: github.ref == 'refs/heads/main'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "🚀 Saler Platform - Production Deployment"
+          to: ${{ secrets.NOTIFICATION_EMAIL }}
+          from: ${{ secrets.EMAIL_USERNAME }}
+          html_body: |
+            <h2>🚀 Saler Platform - Production Deployment</h2>
+            <p><strong>Version:</strong> ${{ needs.pre-deployment.outputs.version }}</p>
+            <p><strong>Commit:</strong> ${{ github.sha }}</p>
+            <p><strong>Deployed by:</strong> ${{ github.actor }}</p>
+            <p><strong>Date:</strong> $(date)</p>
+            <p><strong>Frontend URL:</strong> ${{ secrets.FRONTEND_SERVICE_URL }}</p>
+            <p><strong>Backend URL:</strong> ${{ secrets.BACKEND_SERVICE_URL }}</p>
+
+      - name: 🏷️ Create Deployment Tag
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          TAG="deploy-${{ needs.pre-deployment.outputs.version }}"
+          
+          git tag -a "$TAG" -m "Deployment $TAG"
+          git push origin "$TAG"
+
+  # ==================== DEPLOYMENT FAILED ====================
+  deployment-failed:
+    name: ❌ Deployment Failed
+    runs-on: ubuntu-latest
+    needs: [pre-deployment]
+    if: always() && (needs.pre-deployment.outputs.deploy-allowed == 'false' || needs.post-deployment-validation.result == 'failure')
+    
+    steps:
+      - name: 📊 Generate Failure Report
+        run: |
+          echo "## ❌ Deployment Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔍 Failure Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: ${{ github.event.inputs.environment || 'prod' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Attempted by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ needs.pre-deployment.outputs.deploy-allowed }}" == "false" ]]; then
+            echo "### ⚠️ Deployment Not Allowed" >> $GITHUB_STEP_SUMMARY
+            echo "Pre-deployment checks failed. Please review the issues above." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### 🚫 Post-deployment Validation Failed" >> $GITHUB_STEP_SUMMARY
+            echo "Deployment completed but validation tests failed. Manual review required." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "📅 **Failed at**: $(date)" >> $GITHUB_STEP_SUMMARY
+
+      - name: 🚨 Slack Alert
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#deployments'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          message: "❌ Deployment failed! Environment: ${{ github.event.inputs.environment || 'prod' }}, Commit: ${{ github.sha }}. Please check the deployment logs and take appropriate action."

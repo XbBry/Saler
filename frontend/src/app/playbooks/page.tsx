@@ -42,6 +42,10 @@ import {
   User,
   Building,
   Globe,
+  Workflow,
+  GitBranch,
+  Cog,
+  FileText,
 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/Card';
@@ -56,6 +60,12 @@ import { useAuthStore } from '../../lib/authStore';
 import { useToast } from '../../hooks/useToast';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import {
+  PlaybookBuilder,
+  AdvancedConditionsBuilder,
+  TaskAutomationManager,
+  AdvancedAnalyticsDashboard
+} from '../../components/playbooks';
 
 interface PlaybookStep {
   id: string;
@@ -375,6 +385,8 @@ export default function PlaybooksPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [activeTab, setActiveTab] = useState('overview');
+  const [editingPlaybook, setEditingPlaybook] = useState<Playbook | null>(null);
 
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
@@ -497,6 +509,40 @@ export default function PlaybooksPage() {
     setShowPlaybookDetails(true);
   };
 
+  const handleCreatePlaybook = () => {
+    setEditingPlaybook(null);
+    setActiveTab('builder');
+  };
+
+  const handleEditPlaybook = (playbook: Playbook) => {
+    setEditingPlaybook(playbook);
+    setActiveTab('builder');
+  };
+
+  const handlePlaybookSaved = (playbook: Playbook) => {
+    queryClient.invalidateQueries({ queryKey: ['playbooks'] });
+    toast({
+      title: editingPlaybook ? 'تم التحديث' : 'تم الإنشاء',
+      description: `تم ${editingPlaybook ? 'تحديث' : 'إنشاء'} الـ Playbook بنجاح`,
+    });
+    setActiveTab('overview');
+    setEditingPlaybook(null);
+  };
+
+  const handleConditionsSave = (conditions: any[]) => {
+    toast({
+      title: 'تم الحفظ',
+      description: 'تم حفظ الشروط المتقدمة بنجاح',
+    });
+  };
+
+  const handleTaskAutomationSave = (config: any) => {
+    toast({
+      title: 'تم الحفظ',
+      description: 'تم حفظ إعدادات أتمتة المهام بنجاح',
+    });
+  };
+
   const getStatusColor = (status: string) => {
     const colors = {
       active: 'bg-green-100 text-green-800',
@@ -579,55 +625,21 @@ export default function PlaybooksPage() {
   return (
     <div className="min-h-screen bg-gray-50" dir="rtl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
+        {/* Main Navigation Tabs */}
         <motion.div
           className="mb-8"
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.6 }}
         >
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-            <div className="mb-4 lg:mb-0">
-              <div className="flex items-center space-x-3 space-x-reverse">
-                <h1 className="text-3xl font-bold text-gray-900">
-                  إدارة الـ Playbooks
-                </h1>
-                <Badge variant="secondary" className="bg-purple-100 text-purple-800">
-                  {playbooks.length} playbook
-                </Badge>
-              </div>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                إدارة الـ Playbooks المتطورة
+              </h1>
               <p className="mt-1 text-sm text-gray-600">
-                أتمتة عمليات المبيعات مع الـ Playbooks الذكية
+                نظام متكامل لبناء وإدارة وسير العمل الآلي للعملاء المحتملين
               </p>
-              
-              {analytics && (
-                <div className="flex items-center space-x-6 space-x-reverse mt-3">
-                  <div className="flex items-center space-x-2 space-x-reverse">
-                    <PlayCircle className="w-4 h-4 text-green-500" />
-                    <span className="text-sm text-gray-700">
-                      {analytics.activePlaybooks} نشط
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-2 space-x-reverse">
-                    <BarChart3 className="w-4 h-4 text-blue-500" />
-                    <span className="text-sm text-gray-700">
-                      {analytics.totalRuns} إجمالي التشغيل
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-2 space-x-reverse">
-                    <TrendingUp className="w-4 h-4 text-green-500" />
-                    <span className="text-sm text-gray-700">
-                      نجاح: {analytics.avgSuccessRate}%
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-2 space-x-reverse">
-                    <Clock className="w-4 h-4 text-orange-500" />
-                    <span className="text-sm text-gray-700">
-                      {formatCompletionTime(analytics.avgCompletionTime)} متوسط الوقت
-                    </span>
-                  </div>
-                </div>
-              )}
             </div>
             
             <div className="flex items-center space-x-3 space-x-reverse">
@@ -642,24 +654,129 @@ export default function PlaybooksPage() {
               </Button>
               
               <Button
-                variant="outline"
                 size="sm"
-                onClick={() => setShowCreateDialog(true)}
-              >
-                <Copy className="h-4 w-4 ml-2" />
-                نسخ playbook
-              </Button>
-              
-              <Button
-                size="sm"
-                onClick={() => setShowCreateDialog(true)}
+                onClick={handleCreatePlaybook}
               >
                 <Plus className="h-4 w-4 ml-2" />
-                إنشاء playbook
+                إنشاء playbook متطور
               </Button>
             </div>
           </div>
+
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-5">
+              <TabsTrigger value="overview" className="flex items-center">
+                <BarChart3 className="w-4 h-4 ml-2" />
+                نظرة عامة
+              </TabsTrigger>
+              <TabsTrigger value="builder" className="flex items-center">
+                <Workflow className="w-4 h-4 ml-2" />
+                البناء البصري
+              </TabsTrigger>
+              <TabsTrigger value="conditions" className="flex items-center">
+                <Brain className="w-4 h-4 ml-2" />
+                الشروط المتقدمة
+              </TabsTrigger>
+              <TabsTrigger value="automation" className="flex items-center">
+                <Cog className="w-4 h-4 ml-2" />
+                أتمتة المهام
+              </TabsTrigger>
+              <TabsTrigger value="analytics" className="flex items-center">
+                <TrendingUp className="w-4 h-4 ml-2" />
+                التحليلات المتقدمة
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </motion.div>
+
+        {/* Tab Content */}
+        <Tabs value={activeTab} className="w-full">
+          
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="space-y-6">
+            {/* Analytics Overview */}
+            {analytics && (
+              <motion.div
+                className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6"
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ duration: 0.6, delay: 0.1 }}
+              >
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">إجمالي Playbooks</p>
+                        <p className="text-3xl font-bold text-gray-900">{analytics.totalPlaybooks}</p>
+                        <p className="text-sm text-green-600 flex items-center mt-1">
+                          <TrendingUp className="w-3 h-3 ml-1" />
+                          {analytics.activePlaybooks} نشط
+                        </p>
+                      </div>
+                      <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <BookOpen className="w-6 h-6 text-purple-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">إجمالي التشغيل</p>
+                        <p className="text-3xl font-bold text-gray-900">{analytics.totalRuns}</p>
+                        <p className="text-sm text-blue-600 flex items-center mt-1">
+                          <Activity className="w-3 h-3 ml-1" />
+                          هذا الشهر
+                        </p>
+                      </div>
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <PlayCircle className="w-6 h-6 text-blue-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">معدل النجاح</p>
+                        <p className="text-3xl font-bold text-gray-900">{analytics.avgSuccessRate}%</p>
+                        <p className="text-sm text-green-600 flex items-center mt-1">
+                          <TrendingUp className="w-3 h-3 ml-1" />
+                          +2.1% عن الشهر الماضي
+                        </p>
+                      </div>
+                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                        <Target className="w-6 h-6 text-green-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">الوقت المتوسط</p>
+                        <p className="text-3xl font-bold text-gray-900">
+                          {formatCompletionTime(analytics.avgCompletionTime)}
+                        </p>
+                        <p className="text-sm text-orange-600 flex items-center mt-1">
+                          <Clock className="w-3 h-3 ml-1" />
+                          للإنجاز
+                        </p>
+                      </div>
+                      <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                        <Clock className="w-6 h-6 text-orange-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
 
         {/* Filters */}
         <motion.div
@@ -917,7 +1034,7 @@ export default function PlaybooksPage() {
                                   <Eye className="w-4 h-4 ml-2" />
                                   عرض التفاصيل
                                 </DropdownMenuItem>
-                                <DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleEditPlaybook(playbook)}>
                                   <Edit className="w-4 h-4 ml-2" />
                                   تعديل
                                 </DropdownMenuItem>
@@ -1143,7 +1260,7 @@ export default function PlaybooksPage() {
                   <Button variant="outline" onClick={() => setShowPlaybookDetails(false)}>
                     إغلاق
                   </Button>
-                  <Button>
+                  <Button onClick={() => handleEditPlaybook(selectedPlaybook)}>
                     <Edit className="h-4 w-4 ml-2" />
                     تعديل الـ Playbook
                   </Button>
@@ -1153,8 +1270,89 @@ export default function PlaybooksPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Empty State */}
-        {playbooks.length === 0 && (
+          {/* Quick Actions */}
+          <motion.div
+            className="mt-6 p-6 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-200"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  ابدأ بإنشاء playbook متطور
+                </h3>
+                <p className="text-gray-600">
+                  استخدم الأدوات المتقدمة لبناء سير عمل ذكي وشامل
+                </p>
+              </div>
+              <div className="flex items-center space-x-3 space-x-reverse">
+                <Button
+                  variant="outline"
+                  onClick={() => setActiveTab('conditions')}
+                  className="flex items-center"
+                >
+                  <Brain className="w-4 h-4 ml-2" />
+                  الشروط المتقدمة
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setActiveTab('automation')}
+                  className="flex items-center"
+                >
+                  <Cog className="w-4 h-4 ml-2" />
+                  أتمتة المهام
+                </Button>
+                <Button
+                  onClick={handleCreatePlaybook}
+                  className="flex items-center bg-purple-600 hover:bg-purple-700"
+                >
+                  <Workflow className="w-4 h-4 ml-2" />
+                  البناء البصري
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        </TabsContent>
+
+          {/* Visual Builder Tab */}
+          <TabsContent value="builder" className="mt-6">
+            <PlaybookBuilder
+              playbook={editingPlaybook}
+              onSave={handlePlaybookSaved}
+              onCancel={() => setActiveTab('overview')}
+            />
+          </TabsContent>
+
+          {/* Advanced Conditions Tab */}
+          <TabsContent value="conditions" className="mt-6">
+            <AdvancedConditionsBuilder
+              playbook={editingPlaybook}
+              onSave={handleConditionsSave}
+              onCancel={() => setActiveTab('overview')}
+            />
+          </TabsContent>
+
+          {/* Task Automation Tab */}
+          <TabsContent value="automation" className="mt-6">
+            <TaskAutomationManager
+              playbook={editingPlaybook}
+              onSave={handleTaskAutomationSave}
+              onCancel={() => setActiveTab('overview')}
+            />
+          </TabsContent>
+
+          {/* Advanced Analytics Tab */}
+          <TabsContent value="analytics" className="mt-6">
+            <AdvancedAnalyticsDashboard
+              playbooks={playbooks}
+              onClose={() => setActiveTab('overview')}
+            />
+          </TabsContent>
+        </Tabs>
+
+        {/* Empty State for Overview Tab */}
+        {playbooks.length === 0 && activeTab === 'overview' && (
           <motion.div
             className="text-center py-12"
             initial={{ opacity: 0, y: 20 }}
@@ -1164,15 +1362,53 @@ export default function PlaybooksPage() {
             <BookOpen className="mx-auto h-12 w-12 text-gray-400 mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">لا توجد Playbooks</h3>
             <p className="text-gray-600 mb-4">
-              لم يتم العثور على Playbooks تحط على معايير البحث الحالية
+              ابدأ بإنشاء أول playbook متطور الخاص بك
             </p>
-            <Button onClick={() => setShowCreateDialog(true)}>
+            <Button onClick={handleCreatePlaybook}>
               <Plus className="h-4 w-4 ml-2" />
-              إنشاء أول playbook
+              إنشاء أول playbook متطور
             </Button>
           </motion.div>
         )}
+        
+        {/* Dialog for Legacy Actions (if needed) */}
+        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>إنشاء playbook جديد</DialogTitle>
+              <DialogDescription>
+                اختر طريقة الإنشاء المفضلة لديك
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <Button 
+                variant="outline" 
+                className="h-24 flex-col space-y-2"
+                onClick={() => {
+                  setShowCreateDialog(false);
+                  setActiveTab('builder');
+                }}
+              >
+                <Workflow className="w-8 h-8 text-purple-600" />
+                <span>البناء البصري</span>
+              </Button>
+              <Button 
+                variant="outline" 
+                className="h-24 flex-col space-y-2"
+                onClick={() => {
+                  setShowCreateDialog(false);
+                  setActiveTab('conditions');
+                }}
+              >
+                <Brain className="w-8 h-8 text-blue-600" />
+                <span>الشروط المتقدمة</span>
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
+  );
+}
   );
 }

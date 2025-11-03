@@ -1,4 +1,22 @@
-# Saler - منصة إدارة العملاء المحتملين بالذكاء الاصطناعي
+# 🚀 Saler - منصة إدارة العملاء المحتملين بالذكاء الاصطناعي
+
+[![CI Pipeline](https://github.com/your-org/saler/workflows/%F0%9F%9A%80%20CI%20Pipeline/badge.svg)](https://github.com/your-org/saler/actions/workflows/ci.yml)
+[![Security Scan](https://github.com/your-org/saler/workflows/%F0%9F%94%92%20Security%20Scanning%20%26%20Analysis/badge.svg)](https://github.com/your-org/saler/actions/workflows/security.yml)
+[![Deploy](https://github.com/your-org/saler/workflows/%F0%9F%9A%80%20Deploy%20Pipeline/badge.svg)](https://github.com/your-org/saler/actions/workflows/deploy.yml)
+[![Performance](https://github.com/your-org/saler/workflows/%E2%9A%A1%EF%B8%8F%20Performance%20Testing%20%26%20Monitoring/badge.svg)](https://github.com/your-org/saler/actions/workflows/performance.yml)
+[![Documentation](https://github.com/your-org/saler/workflows/%F0%9F%93%9A%20Documentation%20Pipeline/badge.svg)](https://github.com/your-org/saler/actions/workflows/documentation.yml)
+
+[![codecov](https://codecov.io/gh/your-org/saler/branch/main/graph/badge.svg)](https://codecov.io/gh/your-org/saler)
+[![CodeQL](https://github.com/your-org/saler/actions/workflows/codeql-analysis/badge.svg)](https://github.com/your-org/saler/security/code-scanning)
+[![License](https://img.shields.io/github/license/your-org/saler.svg)](LICENSE)
+[![Version](https://img.shields.io/github/v/release/your-org/saler.svg)](https://github.com/your-org/saler/releases)
+
+[![FastAPI](https://img.shields.io/badge/FastAPI-3.11+-green.svg)](https://fastapi.tiangolo.com)
+[![Next.js](https://img.shields.io/badge/Next.js-14+-black.svg)](https://nextjs.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-blue.svg)](https://postgresql.org)
+[![Redis](https://img.shields.io/badge/Redis-7+-red.svg)](https://redis.io)
+[![Python](https://img.shields.io/badge/Python-3.11+-yellow.svg)](https://python.org)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org)
 
 ## ✅ حالة المشروع - MVP جاهز للتجربة
 
@@ -153,7 +171,87 @@ cd backend && alembic history --verbose
 
 ---
 
-**📅 التاريخ**: 2025-11-02  
+## 🔄 GitHub Actions CI/CD Pipeline
+
+يحتوي المشروع على نظام CI/CD شامل مع 5 workflows رئيسية:
+
+### 📊 CI Pipeline (الاختبارات المستمرة)
+- **Python Testing**: اختبار الـ backend مع Python 3.11
+- **Node.js Testing**: اختبار الـ frontend مع Node.js 18
+- **Database Testing**: اختبار مع PostgreSQL و Redis
+- **Integration Tests**: اختبار التكامل الشامل
+- **Coverage Reporting**: تقرير تغطية الاختبارات
+
+### 🔒 Security Pipeline (فحص الأمان)
+- **SAST Scanning**: تحليل الثغرات الأمنية في الكود
+- **Dependency Scanning**: فحص الثغرات في المكتبات
+- **Secret Scanning**: البحث عن المفاتيح والسرية المكشوفة
+- **License Compliance**: فحص تراخيص البرمجيات
+- **Container Security**: فحص أمان الحاويات
+
+### 🚀 Deploy Pipeline (النشر)
+- **Multi-stage Deployment**: نشر متدرج (dev → staging → prod)
+- **Docker Image Building**: بناء صور Docker محسنة
+- **Environment Management**: إدارة المتغيرات البيئية
+- **Health Checks**: فحوصات الصحة بعد النشر
+- **Rollback Support**: دعم الاسترجاع التلقائي
+
+### ⚡ Performance Pipeline (اختبارات الأداء)
+- **Load Testing**: اختبار الحمولة مع K6
+- **Stress Testing**: اختبار الإجهاد للاكتشاف نقاط الكسر
+- **Lighthouse Audits**: فحص أداء المواقع
+- **Memory Profiling**: تحليل استخدام الذاكرة
+- **Database Performance**: فحص أداء قاعدة البيانات
+
+### 📚 Documentation Pipeline (التوثيق)
+- **API Documentation**: توليد وثائق API تلقائياً
+- **Component Documentation**: توثيق مكونات React
+- **User Guide**: دليل المستخدم
+- **Developer Docs**: وثائق المطور
+- **Architecture Docs**: وثائق البنية المعمارية
+
+### 🔄 Workflow Dispatch
+
+جميع الـ workflows تدعم التشغيل اليدوي عبر `workflow_dispatch`:
+
+```bash
+# تشغيل CI يدوياً
+gh workflow run ci.yml
+
+# تشغيل Security Scan
+gh workflow run security.yml
+
+# النشر إلى بيئة معينة
+gh workflow run deploy.yml -f environment=staging
+
+# تشغيل Performance Tests
+gh workflow run performance.yml -f test_type=full
+
+# بناء Documentation
+gh workflow run documentation.yml -f build_type=all
+```
+
+### 🌍 Environments
+
+المشروع يحتوي على 3 بيئات للنشر:
+
+| البيئة | الغرض | الرابط |
+|--------|-------|--------|
+| **Development** | الاختبار اليومي | `dev.saler.example.com` |
+| **Staging** | اختبار ما قبل الإنتاج | `staging.saler.example.com` |
+| **Production** | الإنتاج | `saler.example.com` |
+
+### 📈 Monitoring & Alerts
+
+- **Slack Integration**: تنبيهات فورية على قناة `#deployments`
+- **Email Notifications**: تقارير عبر البريد الإلكتروني
+- **Performance Monitoring**: مراقبة الأداء المستمرة
+- **Security Alerts**: تنبيهات الأمان
+
+---
+
+**📅 التاريخ**: 2025-11-04  
 **👨‍💻 تم الإعداد بواسطة**: MiniMax Agent  
 **✅ الحالة**: **جاهز للتجربة والاختبار الأولي**  
 **🎉 النتيجة**: **MVP متكامل وصحيح بدون أخطاء!**
+**🔄 CI/CD**: **نظام CI/CD شامل مع 5 workflows متقدمة**

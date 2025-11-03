@@ -1,0 +1,48 @@
+# المتطلبات الأساسية لنظام المراقبة
+# Essential Monitoring System Requirements
+
+# مكتبات أساسية
+aiohttp>=3.8.0
+psutil>=5.9.0
+prometheus-client>=0.15.0
+redis>=4.3.0
+requests>=2.28.0
+
+# مكتبات التصدير والتصور
+numpy>=1.21.0
+pandas>=1.5.0
+matplotlib>=3.5.0
+
+# مكتبات الويب والـ APIs
+fastapi>=0.80.0
+uvicorn>=0.17.0
+pydantic>=1.9.0
+
+# مكتبات قاعدة البيانات
+sqlalchemy>=1.4.0
+alembic>=1.8.0
+
+# مكتبات الإشعارات والتواصل
+slack-sdk>=3.18.0
+discord.py>=2.0.0
+twilio>=7.16.0
+
+# مكتبات التحليل والتوقعات
+scikit-learn>=1.1.0
+scipy>=1.9.0
+
+# مكتبات التحكم والتنفيذ
+schedule>=1.1.0
+python-crontab>=2.6.0
+
+# مكتبات الأمان
+cryptography>=37.0.0
+pyotp>=2.6.0
+
+# مكتبات المراقبة المتقدمة
+memory-profiler>=0.60.0
+pydantic>=1.9.0
+
+# مكتبات الاختبار
+pytest>=7.1.0
+pytest-asyncio>=0.20.0

@@ -1,6 +1,18 @@
 # ==============================================================================
 # COMPREHENSIVE .GITIGNORE TEMPLATE
 # ==============================================================================
+
+# ==============================================================================
+# PRE-COMMIT HOOKS
+# ==============================================================================
+**/.pre-commit-cache/
+**/bandit-report.json
+**/.mypy_cache/
+**/.pytest_cache/
+**/coverage.xml
+**/htmlcov/
+**/prof/
+**/*.prof
 # This template covers most common development scenarios and tools
 # Generated patterns use ** to match any subdirectory depth
 
@@ -894,4 +906,111 @@
 # data/
 # uploads/
 # downloads/
+
+# ==============================================================================
+# GITHUB ACTIONS & CI/CD
+# ==============================================================================
+# GitHub Actions workflow artifacts
+**/.github/workflows/artifacts/
+**/artifacts/
+**/.artifacts/
+**/*.tar.gz
+**/*.tgz
+**/*.zip
+
+# GitHub Actions temporary files
+**/.github/workflows/.tmp/
+**/.github/workflows/.cache/
+
+# Workflow logs (optional - you might want to keep some logs)
+**/workflow-logs/
+**/.github/workflows/logs/
+
+# Docker images and containers for CI/CD
+**/.docker/ci/
+**/docker-images/
+**/registry-cache/
+
+# Test reports and coverage from CI
+**/test-results/
+**/coverage-reports/
+**/junit-*.xml
+**/test-output.xml
+
+# Performance test results
+**/perf-results/
+**/lighthouse-results/
+**/.lighthouseci/
+
+# Build artifacts from CI/CD
+**/build-artifacts/
+**/deployment-artifacts/
+**/release-artifacts/
+
+# Temporary CI/CD files
+**/.ci-tmp/
+**/.cicd-temp/
+**/.workflow-cache/
+
+# Package managers for CI/CD
+**/.npm-cache/
+**/.yarn-cache/
+**/.pip-cache/
+
+# ==============================================================================
+# DOCKER COMPOSE (DEVELOPMENT & TESTING)
+# ==============================================================================
+# Docker compose environment files (keep .env.example but ignore actual .env)
+**/.env.local
+**/.env.development.local
+**/.env.test.local
+**/.env.production.local
+
+# Docker volumes and data
+**/docker-data/
+**/volumes/
+**/.docker-data/
+
+# Docker compose override files (keep compose.yml but ignore overrides)
+**/docker-compose.override.yml
+**/docker-compose.local.yml
+**/docker-compose.dev.yml
+**/docker-compose.test.yml
+
+# ==============================================================================
+# DEVELOPMENT TOOLS & EXTENSIONS
+# ==============================================================================
+# VS Code extensions recommendations
+**/.vscode/extensions.json
+
+# VS Code workspace settings (keep project-specific ones)
+**/*.code-workspace
+
+# Browser extensions for testing
+**/.vscode/chrome-user-data/
+
+# ==============================================================================
+# LOCAL DEVELOPMENT
+# ==============================================================================
+# Local configuration overrides
+**/config/local.json
+**/config/local.yml
+**/config/local.yaml
+
+# Local database files
+**/local-db/
+**/dev-db/
+**/test-db/
+
+# Development logs
+**/logs/dev/
+**/logs/test/
+**/local-logs/
+
+# Local SSL certificates
+**/ssl/
+**/certs/
+**/*.pem
+**/*.crt
+**/*.key
 

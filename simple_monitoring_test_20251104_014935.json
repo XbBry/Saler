@@ -1,0 +1,92 @@
+{
+  "timestamp": {
+    "start": "2025-11-04T01:49:33.806878",
+    "end": "2025-11-04T01:49:35.277769",
+    "duration_seconds": 1.470891
+  },
+  "summary": {
+    "total_tests": 5,
+    "successful": 5,
+    "warnings": 0,
+    "errors": 0,
+    "success_rate": 100.0
+  },
+  "results": [
+    {
+      "test": "بيئة Python",
+      "status": "success",
+      "message": "جميع المتطلبات الأساسية مثبتة"
+    },
+    {
+      "test": "ملف الإعدادات",
+      "status": "success",
+      "message": "ملف .env موجود ومكون",
+      "details": {
+        "total_essential": 6,
+        "configured": 6,
+        "configuration_rate": 100.0
+      }
+    },
+    {
+      "test": "ملفات المراقبة",
+      "status": "success",
+      "message": "جميع ملفات النظام موجودة",
+      "details": {
+        "existing_files": 7,
+        "missing_files": 0,
+        "total_files": 7,
+        "total_size_mb": 0.24,
+        "missing_details": []
+      }
+    },
+    {
+      "test": "الوظائف الأساسية",
+      "status": "success",
+      "message": "جميع الوظائف تعمل",
+      "details": {
+        "tests": {
+          "نظام السجلات": "نجح",
+          "مراقبة النظام": "نجح (CPU: 17.0%, Memory: 35.9%)",
+          "Prometheus Metrics": "نجح",
+          "FastAPI Framework": "نجح",
+          "SQLAlchemy Database": "نجح"
+        },
+        "successful": 5,
+        "total": 5,
+        "success_rate": 100.0
+      }
+    },
+    {
+      "test": "موارد النظام",
+      "status": "success",
+      "message": "موارد النظام جيدة",
+      "details": {
+        "cpu": {
+          "usage_percent": 5.5,
+          "cores": 32,
+          "load_average": [
+            8.15625,
+            6.2861328125,
+            5.55712890625
+          ]
+        },
+        "memory": {
+          "total_gb": 60.54,
+          "available_gb": 38.78,
+          "used_percent": 35.9
+        },
+        "disk": {
+          "total_gb": 491.78,
+          "free_gb": 413.19,
+          "used_percent": 12.4
+        }
+      }
+    }
+  ],
+  "recommendations": [
+    "تهيئة مفاتيح API للخدمات الخارجية",
+    "تشغيل خدمات المراقبة (Prometheus, Grafana)",
+    "اختبار نظام التنبيهات",
+    "نشر النظام في البيئة الإنتاجية"
+  ]
+}
