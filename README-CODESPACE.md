@@ -22,24 +22,31 @@
 4. انتظر حتى يتم إنشاء البيئة (2-3 دقائق)
 ```
 
-### 2️⃣ **الخطوة الثانية: تشغيل النظام**
+### 2️⃣ **الخطوة الثانية: تشغيل النظام (محسّن للسرعة)**
+
+**🔧 للتطوير السريع - استخدم هذه الطريقة:**
 ```bash
-# تشغيل المشروع بالكامل (سحابة + قاعدة بيانات + واجهة)
-docker-compose up -d
+# تشغيل Backend فقط (أسرع)
+cd /workspace/backend
+source .venv/bin/activate
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
-# أو تشغيل Frontend فقط
-cd frontend && npm install && npm run dev
+# في Terminal جديد: تشغيل Frontend
+cd /workspace/frontend
+npm run dev:enhanced
+```
 
-# أو تشغيل Backend فقط  
-cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload
+**⚡ أو تشغيل سريع كله:**
+```bash
+# تشغيل Backend + Frontend معاً
+make dev-all
 ```
 
 ### 3️⃣ **الخطوة الثالثة: الوصول للتطبيق**
 ```
 🌐 Frontend: http://localhost:3000
-🔧 Backend API: http://localhost:8000
-📊 pgAdmin: http://localhost:8080
-⚡ Redis: http://localhost:8081
+🔧 Backend API: http://localhost:8000/docs
+🗄️ SQLite Database: saler_dev.db
 ```
 
 ---
