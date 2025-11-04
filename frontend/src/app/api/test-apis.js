@@ -4,7 +4,7 @@
 const API_BASE_URL = 'http://localhost:3000/api'
 
 // دالة مساعدة لاختبار API
-async function testAPI(endpoint: string, options: any = {}) {
+async function testAPI(endpoint, options = {}) {
   try {
     console.log(`🧪 اختبار: ${endpoint}`)
     
