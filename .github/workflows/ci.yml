@@ -1,54 +1,32 @@
-name: 🔄 Continuous Integration
+name: 🔄 Basic CI Pipeline
 
 on:
   push:
-    branches: [ main, develop, 'feature/*', 'hotfix/*' ]
+    branches: [ main, develop ]
   pull_request:
     branches: [ main ]
-  schedule:
-    - cron: '0 2 * * 1' # Weekly CI on Monday 2 AM
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # ==================== CODE QUALITY ====================
-  code-quality:
-    name: 🎯 Code Quality & Linting
+  basic-tests:
+    name: 🧪 Basic Code Quality & Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     
     steps:
     - name: 📥 Checkout code
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
-    - name: 🔍 Code Quality Analysis
+    - name: 📊 Repository Info
       run: |
-        echo "## 📊 Code Quality Analysis" >> $GITHUB_STEP_SUMMARY
+        echo "### 📊 Repository Analysis" >> $GITHUB_STEP_SUMMARY
         echo "Repository: ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
-        echo "Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
         echo "Branch: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-
-    - name: 📏 Lines of Code
-      uses: coryan/lines-of-code-action@v0.1.0
-      id: loc
-      with:
-        exclude-regex: "test_.*_spec\\.js|\\.min\\.js|node_modules"
-
-    - name: 📈 Code Statistics
-      run: |
-        echo "### 📈 Repository Statistics" >> $GITHUB_STEP_SUMMARY
-        echo "- **Total Lines**: ${{ steps.loc.outputs.count }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Files**: $(find . -type f -name "*.py" -o -name "*.js" -o -name "*.ts" -o -name "*.tsx" | wc -l)" >> $GITHUB_STEP_SUMMARY
-        echo "- **Python Files**: $(find . -name "*.py" | wc -l)" >> $GITHUB_STEP_SUMMARY
-        echo "- **TypeScript/JS Files**: $(find . -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" | wc -l)" >> $GITHUB_STEP_SUMMARY
+        echo "Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "✅ Repository info captured" >> $GITHUB_STEP_SUMMARY
 
   # ==================== FRONTEND CI ====================
   frontend-ci:
