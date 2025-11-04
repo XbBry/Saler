@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '../../../../components/ui/Button';
 import { Input } from '../../../../components/ui/Input';
 import { cn } from '../../../../lib/utils';
+import { useShopifyIntegration } from '../../../../hooks/useShopifyIntegration';
 import {
   ShoppingBag,
   Settings,
@@ -36,104 +37,59 @@ import {
   Info
 } from 'lucide-react';
 
-// Types for Shopify integration
-interface ShopifyConfig {
-  apiKey: string;
-  storeUrl: string;
-  privateAppName: string;
-  permissions: string[];
-  webhooks: {
-    enabled: boolean;
-    events: string[];
-    secret: string;
-  };
-  syncSettings: {
-    autoSync: boolean;
-    frequency: 'realtime' | 'hourly' | 'daily' | 'weekly';
-    conflictResolution: 'shopify' | 'saler' | 'manual';
-    importProducts: boolean;
-    importCustomers: boolean;
-    importOrders: boolean;
-  };
-  fieldMapping: {
-    customer: Record<string, string>;
-    order: Record<string, string>;
-    product: Record<string, string>;
-  };
-}
-
-// Default configuration
-const defaultConfig: ShopifyConfig = {
-  apiKey: '',
-  storeUrl: '',
-  privateAppName: 'Saler Integration',
-  permissions: ['read_products', 'read_orders', 'read_customers', 'write_orders'],
-  webhooks: {
-    enabled: true,
-    events: ['orders/create', 'orders/updated', 'customers/create', 'customers/update', 'products/create', 'products/update'],
-    secret: ''
-  },
-  syncSettings: {
-    autoSync: true,
-    frequency: 'realtime',
-    conflictResolution: 'shopify',
-    importProducts: true,
-    importCustomers: true,
-    importOrders: true
-  },
-  fieldMapping: {
-    customer: {
-      'first_name': 'first_name',
-      'last_name': 'last_name',
-      'email': 'email',
-      'phone': 'phone',
-      'total_spent': 'score'
-    },
-    order: {
-      'name': 'source',
-      'total_price': 'score',
-      'financial_status': 'status',
-      'fulfillment_status': 'status'
-    },
-    product: {
-      'title': 'name',
-      'vendor': 'source',
-      'product_type': 'tags'
-    }
-  }
-};
+// Import types from hook
+import type { ShopifyConfig } from '../../../../hooks/useShopifyIntegration';
 
 export default function ShopifyIntegrationPage() {
-  const [config, setConfig] = useState<ShopifyConfig>(defaultConfig);
+  // Use the custom hook for Shopify integration
+  const {
+    config,
+    setConfig,
+    webhookUrls,
+    connectionStatus,
+    isConnecting,
+    syncStatus,
+    isLoadingSyncStatus,
+    testConnection,
+    saveConfig,
+    triggerSync,
+    isConfigValid
+  } = useShopifyIntegration();
+  
   const [currentStep, setCurrentStep] = useState(1);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
-  const [syncStatus, setSyncStatus] = useState({
-    lastSync: '2025-11-02 01:30:00',
-    syncProgress: 0,
-    activeSyncs: 0,
-    failedSyncs: 2,
-    totalRecords: 15420
-  });
-
   const [showCodeExample, setShowCodeExample] = useState(false);
 
-  // Mock webhook URLs
-  const webhookUrls = {
-    orders: 'https://saler.app/api/webhooks/shopify/orders',
-    customers: 'https://saler.app/api/webhooks/shopify/customers',
-    products: 'https://saler.app/api/webhooks/shopify/products'
-  };
-
   const handleConnect = async () => {
-    setIsConnecting(true);
-    setConnectionStatus('connecting');
+    if (!isConfigValid) return;
     
-    // Simulate API call
-    setTimeout(() => {
-      setConnectionStatus(config.apiKey && config.storeUrl ? 'connected' : 'error');
-      setIsConnecting(false);
-    }, 2000);
+    try {
+      await testConnection(config);
+    } catch (error) {
+      console.error('Connection failed:', error);
+    }
+  };
+  
+  const handleSaveConfig = async () => {
+    if (!isConfigValid) return;
+    
+    try {
+      saveConfig(config);
+    } catch (error) {
+      console.error('Save config failed:', error);
+    }
+  };
+  
+  const handleTriggerSync = async () => {
+    try {
+      const dataTypes = [
+        ...(config.syncSettings.importProducts ? ['products'] : []),
+        ...(config.syncSettings.importCustomers ? ['customers'] : []),
+        ...(config.syncSettings.importOrders ? ['orders'] : [])
+      ];
+      await triggerSync(dataTypes);
+    } catch (error) {
+      console.error('Sync failed:', error);
+    }
   };
 
   const copyToClipboard = (text: string) => {
@@ -279,14 +235,23 @@ export default function ShopifyIntegrationPage() {
             {connectionStatus === 'disconnected' && 'غير متصل'}
           </span>
         </div>
-        <Button 
-          onClick={handleConnect}
-          disabled={isConnecting || !config.apiKey || !config.storeUrl}
-          loading={isConnecting}
-          loadingText="جاري الاتصال..."
-        >
-          {isConnecting ? 'جاري الاتصال...' : 'اختبار الاتصال'}
-        </Button>
+        <div className="flex space-x-2 space-x-reverse">
+          <Button 
+            onClick={handleConnect}
+            disabled={isConnecting || !isConfigValid}
+            loading={isConnecting}
+            loadingText="جاري الاتصال..."
+          >
+            {isConnecting ? 'جاري الاتصال...' : 'اختبار الاتصال'}
+          </Button>
+          <Button 
+            onClick={handleSaveConfig}
+            disabled={!isConfigValid || connectionStatus !== 'connected'}
+            variant="outline"
+          >
+            حفظ الإعدادات
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -720,29 +685,35 @@ app.post('/webhooks/shopify/orders', (req, res) => {
               </p>
             </div>
 
-            <div className="text-center">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 mb-2">
-                <Clock className="w-6 h-6 text-blue-600" />
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 mb-2">
+                  <Clock className="w-6 h-6 text-blue-600" />
+                </div>
+                <p className="text-sm font-medium">آخر مزامنة</p>
+                <p className="text-xs text-gray-500">
+                  {isLoadingSyncStatus ? 'جاري التحميل...' : (syncStatus?.lastSync || 'لم يتم المزامنة بعد')}
+                </p>
               </div>
-              <p className="text-sm font-medium">آخر مزامنة</p>
-              <p className="text-xs text-gray-500">{syncStatus.lastSync}</p>
-            </div>
 
-            <div className="text-center">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 mb-2">
-                <TrendingUp className="w-6 h-6 text-green-600" />
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 mb-2">
+                  <TrendingUp className="w-6 h-6 text-green-600" />
+                </div>
+                <p className="text-sm font-medium">إجمالي السجلات</p>
+                <p className="text-xs text-gray-500">
+                  {isLoadingSyncStatus ? '...' : (syncStatus?.totalRecords?.toLocaleString() || '0')}
+                </p>
               </div>
-              <p className="text-sm font-medium">إجمالي السجلات</p>
-              <p className="text-xs text-gray-500">{syncStatus.totalRecords.toLocaleString()}</p>
-            </div>
 
-            <div className="text-center">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-yellow-100 mb-2">
-                <AlertTriangle className="w-6 h-6 text-yellow-600" />
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-yellow-100 mb-2">
+                  <AlertTriangle className="w-6 h-6 text-yellow-600" />
+                </div>
+                <p className="text-sm font-medium">أخطاء المزامنة</p>
+                <p className="text-xs text-gray-500">
+                  {isLoadingSyncStatus ? '...' : `${syncStatus?.failedSyncs || 0} أخطاء`}
+                </p>
               </div>
-              <p className="text-sm font-medium">أخطاء المزامنة</p>
-              <p className="text-xs text-gray-500">{syncStatus.failedSyncs} أخطاء</p>
-            </div>
           </div>
         </CardContent>
       </Card>
@@ -761,9 +732,14 @@ app.post('/webhooks/shopify/orders', (req, res) => {
               <span className="text-sm text-gray-700">مزامنة المنتجات</span>
               <div className="flex items-center space-x-2 space-x-reverse">
                 <div className="w-32 bg-gray-200 rounded-full h-2">
-                  <div className="bg-blue-600 h-2 rounded-full" style={{width: '75%'}}></div>
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full" 
+                    style={{width: `${syncStatus?.syncProgress || 0}%`}}
+                  ></div>
                 </div>
-                <span className="text-xs text-gray-500">75%</span>
+                <span className="text-xs text-gray-500">
+                  {isLoadingSyncStatus ? '...' : `${syncStatus?.syncProgress || 0}%`}
+                </span>
               </div>
             </div>
 
@@ -771,9 +747,14 @@ app.post('/webhooks/shopify/orders', (req, res) => {
               <span className="text-sm text-gray-700">مزامنة العملاء</span>
               <div className="flex items-center space-x-2 space-x-reverse">
                 <div className="w-32 bg-gray-200 rounded-full h-2">
-                  <div className="bg-green-600 h-2 rounded-full" style={{width: '100%'}}></div>
+                  <div 
+                    className="bg-green-600 h-2 rounded-full" 
+                    style={{width: `${Math.min(100, (syncStatus?.syncProgress || 0) + 25)}%`}}
+                  ></div>
                 </div>
-                <span className="text-xs text-gray-500">مكتمل</span>
+                <span className="text-xs text-gray-500">
+                  {isLoadingSyncStatus ? '...' : (syncStatus?.syncProgress > 25 ? 'مكتمل' : '...')}
+                </span>
               </div>
             </div>
 
@@ -781,9 +762,14 @@ app.post('/webhooks/shopify/orders', (req, res) => {
               <span className="text-sm text-gray-700">مزامنة الطلبات</span>
               <div className="flex items-center space-x-2 space-x-reverse">
                 <div className="w-32 bg-gray-200 rounded-full h-2">
-                  <div className="bg-yellow-600 h-2 rounded-full" style={{width: '45%'}}></div>
+                  <div 
+                    className="bg-yellow-600 h-2 rounded-full" 
+                    style={{width: `${Math.max(0, (syncStatus?.syncProgress || 0) - 30)}%`}}
+                  ></div>
                 </div>
-                <span className="text-xs text-gray-500">45%</span>
+                <span className="text-xs text-gray-500">
+                  {isLoadingSyncStatus ? '...' : `${Math.max(0, (syncStatus?.syncProgress || 0) - 30)}%`}
+                </span>
               </div>
             </div>
           </div>

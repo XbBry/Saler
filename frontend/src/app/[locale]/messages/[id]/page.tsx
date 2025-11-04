@@ -3,10 +3,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import toast from 'react-hot-toast';
+
+// Hooks
+import { useMessagesDetail } from '@/hooks/useMessagesDetail';
 
 // Components
 import { Button } from '@/components/ui/Button';
@@ -57,7 +59,6 @@ import type {
 } from '@/types';
 
 // Constants
-const MESSAGE_PAGE_SIZE = 50;
 const TYPING_TIMEOUT = 3000;
 const AUTO_SAVE_INTERVAL = 30000;
 
@@ -614,12 +615,10 @@ export default function ConversationPage() {
   const params = useParams();
   const router = useRouter();
   const t = useTranslations();
-  const queryClient = useQueryClient();
   
   const conversationId = params.id as string;
   
   // State
-  const [isLoading, setIsLoading] = useState(true);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [showSidebar, setShowSidebar] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -642,171 +641,93 @@ export default function ConversationPage() {
     scrollToBottom();
   }, [scrollToBottom]);
 
-  // Fetch conversation data
-  const { data: conversation, isLoading: conversationLoading } = useQuery({
-    queryKey: ['conversation', conversationId],
-    queryFn: async () => {
-      // Mock API call - replace with actual API
-      return {
-        id: conversationId,
-        lead_id: 'lead-1',
-        status: 'active' as const,
-        last_message_at: new Date().toISOString(),
-        message_count: 42,
-        created_at: new Date(Date.now() - 3600000).toISOString()
-      } as Conversation;
-    },
-    enabled: !!conversationId
-  });
-
-  // Fetch lead data
-  const { data: lead } = useQuery({
-    queryKey: ['lead', conversation?.lead_id],
-    queryFn: async () => {
-      // Mock API call - replace with actual API
-      return {
-        id: 'lead-1',
-        name: 'أحمد محمد',
-        email: 'ahmed@example.com',
-        phone: '+966501234567',
-        company: 'شركة التقنية المتقدمة',
-        status: 'qualified' as const,
-        score: 85,
-        created_at: new Date().toISOString()
-      } as Lead;
-    },
-    enabled: !!conversation?.lead_id
-  });
-
-  // Fetch messages
-  const { 
-    data: messages = [], 
-    isLoading: messagesLoading,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage
-  } = useQuery({
-    queryKey: ['messages', conversationId],
-    queryFn: async ({ pageParam = 0 }) => {
-      // Mock API call - replace with actual API
-      const mockMessages: Message[] = Array.from({ length: MESSAGE_PAGE_SIZE }, (_, i) => ({
-        id: `msg-${pageParam * MESSAGE_PAGE_SIZE + i}`,
-        conversation_id: conversationId,
-        content: i % 3 === 0 ? 'مرحباً بك' : i % 3 === 1 ? 'كيف يمكنني مساعدتك؟' : 'شكراً لك',
-        type: 'text' as const,
-        direction: i % 2 === 0 ? 'outbound' : 'inbound',
-        status: 'sent' as const,
-        created_at: new Date(Date.now() - (MESSAGE_PAGE_SIZE - i) * 60000).toISOString()
-      }));
-      return mockMessages;
-    },
-    getNextPageParam: (lastPage) => {
-      return lastPage.length === MESSAGE_PAGE_SIZE ? 
-        Math.floor(lastPage.length / MESSAGE_PAGE_SIZE) + 1 : undefined;
-    },
-    enabled: !!conversationId
-  });
-
-  // Send message mutation
-  const sendMessageMutation = useMutation({
-    mutationFn: async ({ content, type }: { content: string; type: MessageType }) => {
-      // Mock API call - replace with actual API
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const newMessage: Message = {
-        id: `msg-${Date.now()}`,
-        conversation_id: conversationId,
-        content,
-        type,
-        direction: 'outbound',
-        status: 'sent',
-        created_at: new Date().toISOString()
-      };
-      
-      return newMessage;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
-      queryClient.invalidateQueries({ queryKey: ['conversation', conversationId] });
-      toast.success('تم إرسال الرسالة');
-    },
-    onError: () => {
-      toast.error('فشل في إرسال الرسالة');
-    }
+  // Use the messages detail hook
+  const {
+    conversation,
+    lead,
+    messages,
+    hasMore,
+    isLoading,
+    isError,
+    error,
+    sendMessage,
+    refreshConversation,
+    loadMoreMessages,
+    markMessageAsRead,
+    isSendingMessage,
+    isLoadingMore
+  } = useMessagesDetail(conversationId, {
+    enableAutoRefresh: true,
+    refreshInterval: 30000
   });
 
   // WebSocket connection for real-time updates
   useEffect(() => {
     if (!conversationId) return;
 
-    // Mock WebSocket connection
     setConnectionStatus('connecting');
     
-    const ws = new WebSocket(`ws://localhost:8000/ws/conversations/${conversationId}`);
-    wsRef.current = ws;
+    try {
+      // Connect to WebSocket for real-time updates
+      const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'}/ws/conversations/${conversationId}`);
+      wsRef.current = ws;
 
-    ws.onopen = () => {
-      setConnectionStatus('connected');
-      console.log('WebSocket connected');
-    };
+      ws.onopen = () => {
+        setConnectionStatus('connected');
+        console.log('WebSocket connected for conversation:', conversationId);
+      };
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      
-      switch (data.type) {
-        case 'new_message':
-          queryClient.setQueryData(['messages', conversationId], (old: any) => {
-            if (!old) return old;
-            return {
-              ...old,
-              pages: [
-                ...old.pages.slice(0, -1),
-                [...old.pages[old.pages.length - 1], data.message]
-              ]
-            };
-          });
-          break;
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
           
-        case 'typing_indicator':
-          // Handle typing indicator
-          break;
-          
-        case 'message_status_update':
-          queryClient.setQueryData(['messages', conversationId], (old: any) => {
-            if (!old) return old;
-            return {
-              ...old,
-              pages: old.pages.map((page: Message[]) =>
-                page.map((msg: Message) =>
-                  msg.id === data.messageId 
-                    ? { ...msg, status: data.status }
-                    : msg
-                )
-              )
-            };
-          });
-          break;
-      }
-    };
+          switch (data.type) {
+            case 'new_message':
+              // Refresh messages to get the new message
+              refreshConversation();
+              toast.success('رسالة جديدة');
+              break;
+              
+            case 'typing_indicator':
+              // Handle typing indicator - could add UI state here
+              break;
+              
+            case 'message_status_update':
+              // Refresh conversation data to update message status
+              refreshConversation();
+              break;
+              
+            case 'lead_status_update':
+              // Refresh lead data if needed
+              break;
+          }
+        } catch (err) {
+          console.error('Error parsing WebSocket message:', err);
+        }
+      };
 
-    ws.onclose = () => {
+      ws.onclose = () => {
+        setConnectionStatus('disconnected');
+        console.log('WebSocket disconnected');
+      };
+
+      ws.onerror = (error) => {
+        setConnectionStatus('disconnected');
+        console.error('WebSocket error:', error);
+      };
+
+      return () => {
+        ws.close();
+      };
+    } catch (error) {
+      console.error('Failed to create WebSocket connection:', error);
       setConnectionStatus('disconnected');
-      console.log('WebSocket disconnected');
-    };
-
-    ws.onerror = () => {
-      setConnectionStatus('disconnected');
-      console.error('WebSocket error');
-    };
-
-    return () => {
-      ws.close();
-    };
-  }, [conversationId, queryClient]);
+    }
+  }, [conversationId, refreshConversation]);
 
   // Handle send message
   const handleSendMessage = async (content: string, type: MessageType) => {
-    await sendMessageMutation.mutateAsync({ content, type });
+    await sendMessage({ content, type });
   };
 
   // Handle typing indicator
@@ -836,6 +757,7 @@ export default function ConversationPage() {
   const handleReact = (messageId: string, emoji: string) => {
     // Handle message reaction
     console.log('React to message:', messageId, emoji);
+    toast.success('تم إضافة التفاعل');
   };
 
   const handleDownload = (attachment: MessageAttachment) => {
@@ -843,7 +765,13 @@ export default function ConversationPage() {
     window.open(attachment.url, '_blank');
   };
 
-  // Mock data for recent activities and AI suggestions
+  const handleLoadMoreMessages = async () => {
+    if (hasMore && !isLoadingMore) {
+      await loadMoreMessages();
+    }
+  };
+
+  // Recent activities and AI suggestions (these could come from separate APIs)
   const recentActivities = [
     {
       id: '1',
@@ -874,25 +802,46 @@ export default function ConversationPage() {
     }
   ];
 
-  if (conversationLoading || messagesLoading) {
+  // Loading state
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="flex items-center space-x-2">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <span>جاري تحميل المحادثة...</span>
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+          <span className="text-lg text-gray-600">جاري تحميل المحادثة...</span>
         </div>
       </div>
     );
   }
 
-  if (!conversation || !lead) {
+  // Error state
+  if (isError || !conversation || !lead) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold mb-2">المحادثة غير موجودة</h2>
-          <Button onClick={() => router.push('/messages')}>
-            العودة إلى المحادثات
-          </Button>
+        <div className="text-center max-w-md">
+          <div className="mb-4">
+            <AlertCircle className="h-16 w-16 text-red-500 mx-auto" />
+          </div>
+          <h2 className="text-xl font-semibold mb-2 text-gray-900">
+            {isError ? 'خطأ في تحميل المحادثة' : 'المحادثة غير موجودة'}
+          </h2>
+          <p className="text-gray-600 mb-4">
+            {isError 
+              ? error?.message || 'حدث خطأ غير متوقع'
+              : 'لم يتم العثور على المحادثة المطلوبة'
+            }
+          </p>
+          <div className="space-x-2">
+            <Button onClick={refreshConversation}>
+              إعادة المحاولة
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => router.push('/messages')}
+            >
+              العودة إلى المحادثات
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -999,15 +948,18 @@ export default function ConversationPage() {
           className="flex-1 overflow-y-auto p-6 space-y-4"
         >
           {/* Load More Messages Button */}
-          {hasNextPage && (
+          {hasMore && (
             <div className="text-center">
               <Button
                 variant="outline"
-                onClick={() => fetchNextPage()}
-                disabled={isFetchingNextPage}
+                onClick={handleLoadMoreMessages}
+                disabled={isLoadingMore}
               >
-                {isFetchingNextPage ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                {isLoadingMore ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    جاري التحميل...
+                  </>
                 ) : (
                   'تحميل رسائل أقدم'
                 )}
@@ -1016,7 +968,7 @@ export default function ConversationPage() {
           )}
 
           {/* Messages List */}
-          {messages.pages.flat().map((message: Message, index: number) => (
+          {messages.map((message: Message, index: number) => (
             <MessageBubble
               key={message.id}
               message={message}
@@ -1037,7 +989,7 @@ export default function ConversationPage() {
         <MessageComposer
           conversationId={conversationId}
           onSendMessage={handleSendMessage}
-          disabled={sendMessageMutation.isPending}
+          disabled={isSendingMessage}
           onTypingStart={handleTypingStart}
           onTypingEnd={handleTypingEnd}
         />

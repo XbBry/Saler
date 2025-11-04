@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import React, { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -58,6 +58,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Progress } from '../../components/ui/Progress';
 import { useAuthStore } from '../../lib/authStore';
 import { useToast } from '../../hooks/useToast';
+import { usePlaybooksComplete } from '../../hooks/usePlaybooks';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import {
@@ -66,315 +67,11 @@ import {
   TaskAutomationManager,
   AdvancedAnalyticsDashboard
 } from '../../components/playbooks';
+import type { Playbook } from '../../hooks/usePlaybooks';
 
-interface PlaybookStep {
-  id: string;
-  type: 'email' | 'sms' | 'call' | 'wait' | 'condition' | 'assign' | 'update_field';
-  name: string;
-  description: string;
-  order: number;
-  delay?: number; // in minutes
-  conditions?: any[];
-  template?: string;
-  assignee?: string;
-  field?: string;
-  value?: any;
-  isActive: boolean;
-}
 
-interface Playbook {
-  id: string;
-  name: string;
-  description: string;
-  category: 'lead_qualification' | 'nurturing' | 'conversion' | 'retention' | 'follow_up';
-  status: 'active' | 'paused' | 'draft' | 'archived';
-  trigger: {
-    type: 'lead_created' | 'status_changed' | 'temperature_change' | 'manual' | 'score_threshold';
-    conditions?: any[];
-  };
-  steps: PlaybookStep[];
-  target_audience?: {
-    tags?: string[];
-    source?: string;
-    status?: string[];
-    temperature?: string[];
-    priority?: string[];
-  };
-  metrics: {
-    totalRuns: number;
-    successRate: number;
-    avgCompletionTime: number;
-    currentActive: number;
-    lastRun: string;
-  };
-  createdAt: string;
-  updatedAt: string;
-  owner: string;
-  tags: string[];
-  isPublic: boolean;
-}
 
-// Mock data for demonstration
-const mockPlaybooks: Playbook[] = [
-  {
-    id: '1',
-    name: 'تأهيل العملاء الجدد',
-    description: 'سلسلة تأهيل تلقائية للعملاء الجدد مع نقاط مراقبة ذكية',
-    category: 'lead_qualification',
-    status: 'active',
-    trigger: {
-      type: 'lead_created',
-      conditions: [
-        { field: 'source', operator: 'equals', value: 'website' },
-        { field: 'priority', operator: 'equals', value: 'high' }
-      ]
-    },
-    steps: [
-      {
-        id: 'step-1',
-        type: 'email',
-        name: 'رسالة ترحيب شخصية',
-        description: 'إرسال رسالة ترحيب شخصية مع معلومات المنتج',
-        order: 1,
-        template: 'welcome_email_template',
-        isActive: true,
-      },
-      {
-        id: 'step-2',
-        type: 'wait',
-        name: 'انتظار 24 ساعة',
-        description: 'انتظار تفاعل العميل لمدة 24 ساعة',
-        order: 2,
-        delay: 1440, // 24 hours in minutes
-        isActive: true,
-      },
-      {
-        id: 'step-3',
-        type: 'condition',
-        name: 'تحقق من التفاعل',
-        description: 'التحقق من تفاعل العميل مع الرسالة',
-        order: 3,
-        conditions: [
-          { field: 'email_opened', operator: 'equals', value: true }
-        ],
-        isActive: true,
-      },
-      {
-        id: 'step-4',
-        type: 'assign',
-        name: 'تعيين لمسؤول المبيعات',
-        description: 'تعيين العميل لمسؤول مبيعات متخصص',
-        order: 4,
-        assignee: 'sales_rep_1',
-        isActive: true,
-      },
-    ],
-    target_audience: {
-      tags: ['مستهدف', 'جديد'],
-      source: ['website', 'social_media'],
-      status: ['new'],
-      temperature: ['cold', 'warm'],
-      priority: ['high', 'urgent'],
-    },
-    metrics: {
-      totalRuns: 156,
-      successRate: 87.5,
-      avgCompletionTime: 48,
-      currentActive: 12,
-      lastRun: new Date(Date.now() - 3600000).toISOString(),
-    },
-    createdAt: new Date(Date.now() - 604800000).toISOString(),
-    updatedAt: new Date().toISOString(),
-    owner: 'current-user',
-    tags: ['تأهيل', 'جديد', 'تلقائي'],
-    isPublic: true,
-  },
-  {
-    id: '2',
-    name: 'استعادة العملاء الساخنين',
-    description: 'تفعيل العملاء ذوي درجة الحرارة العالية للإغلاق السريع',
-    category: 'conversion',
-    status: 'active',
-    trigger: {
-      type: 'temperature_change',
-      conditions: [
-        { field: 'temperature', operator: 'equals', value: 'hot' }
-      ]
-    },
-    steps: [
-      {
-        id: 'step-1',
-        type: 'call',
-        name: 'اتصال فوري',
-        description: 'اتصال هاتفي فوري مع العميل الساخن',
-        order: 1,
-        isActive: true,
-      },
-      {
-        id: 'step-2',
-        type: 'wait',
-        name: 'انتظار 2 ساعة',
-        description: 'انتظار استجابة العميل',
-        order: 2,
-        delay: 120, // 2 hours in minutes
-        isActive: true,
-      },
-      {
-        id: 'step-3',
-        type: 'email',
-        name: 'إرسال عرض شخصي',
-        description: 'إرسال عرض مخصص بناءً على احتياجات العميل',
-        order: 3,
-        template: 'hot_lead_offer_template',
-        isActive: true,
-      },
-      {
-        id: 'step-4',
-        type: 'condition',
-        name: 'متابعة الإغلاق',
-        description: 'متابعة عملية الإغلاق',
-        order: 4,
-        isActive: true,
-      },
-    ],
-    target_audience: {
-      temperature: ['hot'],
-      priority: ['high', 'urgent'],
-    },
-    metrics: {
-      totalRuns: 89,
-      successRate: 92.1,
-      avgCompletionTime: 12,
-      currentActive: 8,
-      lastRun: new Date(Date.now() - 1800000).toISOString(),
-    },
-    createdAt: new Date(Date.now() - 1209600000).toISOString(),
-    updatedAt: new Date(Date.now() - 7200000).toISOString(),
-    owner: 'current-user',
-    tags: ['ساخن', 'إغلاق', 'عاجل'],
-    isPublic: false,
-  },
-  {
-    id: '3',
-    name: 'العناية بالعملاء الموجودين',
-    description: 'حفظ وتفعيل العملاء الموجودين لتعزيز العلاقة',
-    category: 'retention',
-    status: 'active',
-    trigger: {
-      type: 'status_changed',
-      conditions: [
-        { field: 'status', operator: 'equals', value: 'closed_won' }
-      ]
-    },
-    steps: [
-      {
-        id: 'step-1',
-        type: 'email',
-        name: 'رسالة شكر وترحيب',
-        description: 'رسالة شكر للعمل الجديد مع مرحب',
-        order: 1,
-        template: 'customer_welcome_template',
-        isActive: true,
-      },
-      {
-        id: 'step-2',
-        type: 'wait',
-        name: 'انتظار أسبوع',
-        description: 'انتظار فترة كافية للتكيف',
-        order: 2,
-        delay: 10080, // 1 week in minutes
-        isActive: true,
-      },
-      {
-        id: 'step-3',
-        type: 'call',
-        name: 'مكالمة متابعة',
-        description: 'مكالمة متابعة للتأكد من الرضا',
-        order: 3,
-        isActive: true,
-      },
-      {
-        id: 'step-4',
-        type: 'condition',
-        name: 'تقييم الرضا',
-        description: 'تقييم مستوى رضا العميل',
-        order: 4,
-        isActive: true,
-      },
-    ],
-    target_audience: {
-      status: ['closed_won'],
-    },
-    metrics: {
-      totalRuns: 234,
-      successRate: 95.3,
-      avgCompletionTime: 168, // 1 week in hours
-      currentActive: 15,
-      lastRun: new Date(Date.now() - 86400000).toISOString(),
-    },
-    createdAt: new Date(Date.now() - 2592000000).toISOString(),
-    updatedAt: new Date(Date.now() - 86400000).toISOString(),
-    owner: 'current-user',
-    tags: ['عملاء', 'رعاية', 'رضا'],
-    isPublic: true,
-  },
-  {
-    id: '4',
-    name: 'تتبع العملاء الباردين',
-    description: 'إعادة تفعيل العملاء ذوي درجة الحرارة المنخفضة',
-    category: 'nurturing',
-    status: 'paused',
-    trigger: {
-      type: 'temperature_change',
-      conditions: [
-        { field: 'temperature', operator: 'equals', value: 'cold' }
-      ]
-    },
-    steps: [
-      {
-        id: 'step-1',
-        type: 'email',
-        name: 'محتوى قيم',
-        description: 'إرسال محتوى قيم وعملي',
-        order: 1,
-        template: 'cold_lead_nurturing_template',
-        isActive: true,
-      },
-      {
-        id: 'step-2',
-        type: 'wait',
-        name: 'انتظار 3 أيام',
-        description: 'انتظار وقت كافي للتفاعل',
-        order: 2,
-        delay: 4320, // 3 days in minutes
-        isActive: true,
-      },
-      {
-        id: 'step-3',
-        type: 'condition',
-        name: 'تقييم التفاعل',
-        description: 'تقييم مستوى تفاعل العميل',
-        order: 3,
-        isActive: true,
-      },
-    ],
-    target_audience: {
-      temperature: ['cold'],
-    },
-    metrics: {
-      totalRuns: 67,
-      successRate: 34.3,
-      avgCompletionTime: 72,
-      currentActive: 0,
-      lastRun: new Date(Date.now() - 172800000).toISOString(),
-    },
-    createdAt: new Date(Date.now() - 345600000).toISOString(),
-    updatedAt: new Date(Date.now() - 259200000).toISOString(),
-    owner: 'current-user',
-    tags: ['بارد', 'إعادة تفعيل', 'رعاية'],
-    isPublic: false,
-  },
-];
+
 
 export default function PlaybooksPage() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -392,61 +89,30 @@ export default function PlaybooksPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Fetch playbooks with filters
+  // Use the comprehensive Playbooks hook
   const {
-    data: playbooks = mockPlaybooks,
+    playbooks,
+    stats: analytics,
     isLoading,
     error,
+    isCreating,
+    isUpdating,
+    isDeleting,
+    isTogglingStatus,
+    isRunning,
+    isDuplicating,
+    toggleError,
+    runError,
+    deleteError,
+    togglePlaybookStatus,
+    runPlaybook,
+    duplicatePlaybook,
+    deletePlaybook,
     refetch,
-  } = useQuery<Playbook[]>({
-    queryKey: ['playbooks', searchQuery, categoryFilter, statusFilter],
-    queryFn: async () => {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      let filteredPlaybooks = [...mockPlaybooks];
-
-      if (searchQuery) {
-        filteredPlaybooks = filteredPlaybooks.filter(playbook =>
-          playbook.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          playbook.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          playbook.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
-        );
-      }
-
-      if (categoryFilter !== 'all') {
-        filteredPlaybooks = filteredPlaybooks.filter(playbook => playbook.category === categoryFilter);
-      }
-
-      if (statusFilter !== 'all') {
-        filteredPlaybooks = filteredPlaybooks.filter(playbook => playbook.status === statusFilter);
-      }
-
-      return filteredPlaybooks;
-    },
-    staleTime: 30000,
-  });
-
-  // Analytics data
-  const {
-    data: analytics,
-    isLoading: analyticsLoading,
-  } = useQuery({
-    queryKey: ['playbooks-analytics'],
-    queryFn: async () => {
-      const totalRuns = mockPlaybooks.reduce((sum, p) => sum + p.metrics.totalRuns, 0);
-      const avgSuccessRate = mockPlaybooks.reduce((sum, p) => sum + p.metrics.successRate, 0) / mockPlaybooks.length;
-      const totalActive = mockPlaybooks.reduce((sum, p) => sum + p.metrics.currentActive, 0);
-      const avgCompletionTime = mockPlaybooks.reduce((sum, p) => sum + p.metrics.avgCompletionTime, 0) / mockPlaybooks.length;
-
-      return {
-        totalPlaybooks: mockPlaybooks.length,
-        activePlaybooks: mockPlaybooks.filter(p => p.status === 'active').length,
-        totalRuns,
-        avgSuccessRate: Math.round(avgSuccessRate * 10) / 10,
-        totalActive,
-        avgCompletionTime: Math.round(avgCompletionTime),
-      };
-    },
+  } = usePlaybooksComplete({
+    search: searchQuery || undefined,
+    category: categoryFilter !== 'all' ? categoryFilter : undefined,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
   });
 
   const handleRefresh = async () => {
@@ -470,9 +136,10 @@ export default function PlaybooksPage() {
 
   const handleTogglePlaybook = async (playbookId: string, newStatus: string) => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      queryClient.invalidateQueries({ queryKey: ['playbooks'] });
+      togglePlaybookStatus({ 
+        playbookId, 
+        status: newStatus as 'active' | 'paused' | 'draft' | 'archived'
+      });
       toast({
         title: 'تم التحديث',
         description: `تم ${newStatus === 'active' ? 'تفعيل' : 'إيقاف'} الـ Playbook بنجاح`,
@@ -488,9 +155,7 @@ export default function PlaybooksPage() {
 
   const handleDeletePlaybook = async (playbookId: string) => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      queryClient.invalidateQueries({ queryKey: ['playbooks'] });
+      deletePlaybook(playbookId);
       toast({
         title: 'تم الحذف',
         description: 'تم حذف الـ Playbook بنجاح',
@@ -499,6 +164,41 @@ export default function PlaybooksPage() {
       toast({
         title: 'خطأ في الحذف',
         description: 'فشل في حذف الـ Playbook',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleRunPlaybook = async (playbookId: string) => {
+    try {
+      runPlaybook({ playbookId });
+      toast({
+        title: 'تم التشغيل',
+        description: 'تم تشغيل الـ Playbook بنجاح',
+      });
+    } catch (error) {
+      toast({
+        title: 'خطأ في التشغيل',
+        description: 'فشل في تشغيل الـ Playbook',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDuplicatePlaybook = async (playbook: Playbook) => {
+    try {
+      duplicatePlaybook({ 
+        playbookId: playbook.id, 
+        newName: `${playbook.name} - نسخة` 
+      });
+      toast({
+        title: 'تم النسخ',
+        description: 'تم نسخ الـ Playbook بنجاح',
+      });
+    } catch (error) {
+      toast({
+        title: 'خطأ في النسخ',
+        description: 'فشل في نسخ الـ Playbook',
         variant: 'destructive',
       });
     }
@@ -520,7 +220,7 @@ export default function PlaybooksPage() {
   };
 
   const handlePlaybookSaved = (playbook: Playbook) => {
-    queryClient.invalidateQueries({ queryKey: ['playbooks'] });
+    refetch();
     toast({
       title: editingPlaybook ? 'تم التحديث' : 'تم الإنشاء',
       description: `تم ${editingPlaybook ? 'تحديث' : 'إنشاء'} الـ Playbook بنجاح`,
@@ -855,7 +555,7 @@ export default function PlaybooksPage() {
               </TabsList>
               
               <div className="text-sm text-gray-600">
-                عرض {playbooks.length} من {mockPlaybooks.length} playbook
+                عرض {playbooks.length} playbook
               </div>
             </div>
             
@@ -1038,9 +738,13 @@ export default function PlaybooksPage() {
                                   <Edit className="w-4 h-4 ml-2" />
                                   تعديل
                                 </DropdownMenuItem>
-                                <DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleDuplicatePlaybook(playbook)}>
                                   <Copy className="w-4 h-4 ml-2" />
                                   نسخ
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleRunPlaybook(playbook.id)}>
+                                  <PlayCircle className="w-4 h-4 ml-2" />
+                                  تشغيل
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 {playbook.status === 'active' ? (

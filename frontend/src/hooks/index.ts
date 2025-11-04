@@ -63,6 +63,14 @@ export {
   useIntegrationStats 
 } from './useIntegrations';
 
+export { 
+  useShopifyIntegration,
+  useShopifyConfig,
+  useShopifyConnection,
+  useShopifySync,
+  type ShopifyConfig
+} from './useShopifyIntegration';
+
 // Re-export types that are commonly used with hooks
 export type {
   Message,
@@ -128,6 +136,36 @@ export {
   useIntegrationStatus,
   useIntegrationLogsManager
 } from './use-enhanced-integrations';
+
+// ==================== NEW ADVANCED HOOKS ====================
+
+// Advanced Messages Hook
+export { default as useAdvancedMessages } from './useAdvancedMessages';
+
+// Dashboard Analytics Hook
+export { useDashboardAnalytics } from './useDashboardAnalytics';
+
+// Playbooks Hook
+export { 
+  usePlaybooks,
+  usePlaybooksComplete,
+  usePlaybook,
+  usePlaybooksStats,
+  useCreatePlaybook,
+  useUpdatePlaybook,
+  useDeletePlaybook,
+  useTogglePlaybookStatus,
+  useRunPlaybook,
+  useDuplicatePlaybook,
+  useImportPlaybooks,
+  useExportPlaybooks
+} from './usePlaybooks';
+
+// Business Intelligence Hook
+export { useBusinessIntelligence } from './useBusinessIntelligence';
+
+// Notifications System Hook
+export { useNotificationsSystem } from './useNotificationsSystem';
 
 // ==================== QUERY UTILITIES ====================
 
@@ -210,10 +248,19 @@ export default {
   useAnalytics: useEnhancedAnalytics,
   useIntegrations: useEnhancedIntegrations,
   
+  // Playbooks hook
+  usePlaybooksComplete,
+  
   // Integration management
   useIntegration,
   useIntegrationOperations,
   useIntegrationStats,
+  
+  // Shopify integration hook
+  useShopifyIntegration,
+  useShopifyConfig,
+  useShopifyConnection,
+  useShopifySync,
   
   // React Query hooks (alternative naming)
   useAuth: useEnhancedAuth as useAuth,
